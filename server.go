@@ -25,6 +25,19 @@ type Server struct {
 	ConnectHandler
 }
 
+type Addr struct {
+	Network string
+	Address string
+}
+
+func ParserAddr(a string) (*Addr, error) {
+	u, err := url.Parse(a)
+	if err != nil {
+		return nil, err
+	}
+	return &Addr{Network: u.Scheme, Address: u.Path}, nil
+}
+
 func clearEnvConnect(scheme, path string) error {
 	if scheme == "unix" {
 		err := os.Remove(path)
@@ -36,18 +49,17 @@ func clearEnvConnect(scheme, path string) error {
 }
 
 func (s *Server) Run(ctx context.Context) {
-
-	u, err := url.Parse(s.addr)
+	u, err := ParserAddr(s.addr)
 	if err != nil {
 		s.Error("failed addr parser ", s.addr, err)
 		return
 	}
-	if err := clearEnvConnect(u.Scheme, u.Path); err != nil {
+	if err := clearEnvConnect(u.Network, u.Address); err != nil {
 		s.Error("Error removing socket file", err)
 		return
 	}
 
-	listener, err := net.Listen(u.Scheme, u.Path)
+	listener, err := net.Listen(u.Network, u.Address)
 	if err != nil {
 		s.Error("failed net listen ", s.addr, err)
 		return
@@ -58,7 +70,7 @@ func (s *Server) Run(ctx context.Context) {
 		if err != nil {
 			s.Error("listener closed", err)
 		}
-		_ = clearEnvConnect(u.Scheme, u.Path)
+		_ = clearEnvConnect(u.Network, u.Address)
 	}()
 	go s.handleAccept(ctx, listener)
 

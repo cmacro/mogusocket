@@ -13,10 +13,8 @@ type ConnectHandler interface {
 	Run(ctx context.Context, conn io.ReadWriter)
 }
 
-type WriterHandler = func(src io.Reader, isText bool) error
-
 type SectionHandler interface {
-	Connect(ctx context.Context, w WriterHandler) int64
+	Connect(ctx context.Context, w func(src io.Reader, isText bool) error, c func()) int64
 	Close(id int64)
 	ReadDump(r io.Reader) error
 }

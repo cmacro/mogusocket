@@ -52,7 +52,7 @@ func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
 		return err
 	}
 
-	sectionid := c.SectionHandler.Connect(sectionCtx, wh)
+	sectionid := c.SectionHandler.Connect(sectionCtx, wh, sectionCancel)
 	defer func() { c.Close(sectionid); sectionCancel() }()
 
 	if sectionid == 0 {
