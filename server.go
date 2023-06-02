@@ -8,6 +8,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -21,28 +22,43 @@ func NewServer(addr string, log Logger) *Server {
 type Server struct {
 	Logger
 	addr string
+	ConnectHandler
 }
 
-func clearEnvConnect(scheme, path string) {
-	// if scheme == "unix" {
-	// }
+func clearEnvConnect(scheme, path string) error {
+	if scheme == "unix" {
+		err := os.Remove(path)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) Run(ctx context.Context) {
+
 	u, err := url.Parse(s.addr)
 	if err != nil {
 		s.Error("failed addr parser ", s.addr, err)
 		return
 	}
-	clearEnvConnect(u.Scheme, u.Path)
+	if err := clearEnvConnect(u.Scheme, u.Path); err != nil {
+		s.Error("Error removing socket file", err)
+		return
+	}
+
 	listener, err := net.Listen(u.Scheme, u.Path)
 	if err != nil {
 		s.Error("failed net listen ", s.addr, err)
 		return
 	}
+	s.Info("listening :", s.addr)
 	defer func() {
-		listener.Close()
-		clearEnvConnect(u.Scheme, u.Path)
+		err := listener.Close()
+		if err != nil {
+			s.Error("listener closed", err)
+		}
+		_ = clearEnvConnect(u.Scheme, u.Path)
 	}()
 	go s.handleAccept(ctx, listener)
 
@@ -51,6 +67,7 @@ func (s *Server) Run(ctx context.Context) {
 }
 
 func (s *Server) handleAccept(ctx context.Context, ln net.Listener) {
+	defer s.Info("listener closed.")
 	for {
 		select {
 		case <-ctx.Done():
@@ -60,7 +77,7 @@ func (s *Server) handleAccept(ctx context.Context, ln net.Listener) {
 			conn, err := ln.Accept()
 			if err != nil {
 				if strings.Contains(err.Error(), "use of closed network connection") {
-					s.Info("Accept closed")
+					s.Info("Accept closed.")
 				} else {
 					s.Warn("handle accept failure", err)
 				}
@@ -83,5 +100,6 @@ func (s *Server) handleAccept(ctx context.Context, ln net.Listener) {
 
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	// dst Writer, src Reader
+
 	<-ctx.Done()
 }

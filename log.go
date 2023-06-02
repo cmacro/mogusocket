@@ -83,7 +83,7 @@ func (s *stdoutLogger) outputf(level, msg string, args ...interface{}) {
 	if len(args) > 0 {
 		outmsg = fmt.Sprintf(msg, args...)
 	}
-	fmt.Print(colorStart, "[", s.mod, " ", level, "]")
+	fmt.Print(colorStart, "[", s.mod, " ", level, "] ")
 	fmt.Println(outmsg, colorReset)
 }
 
@@ -92,10 +92,10 @@ func (s *stdoutLogger) output(level string, msgs ...interface{}) {
 		return
 	}
 	if !s.color {
-		fmt.Print("[", s.mod, " ", level, "]")
+		fmt.Print("[", s.mod, " ", level, "] ")
 		fmt.Println(msgs...)
 	} else {
-		fmt.Print(colors[level], "[", s.mod, " ", level, "]")
+		fmt.Print(colors[level], "[", s.mod, " ", level, "] ")
 		msgs = append(msgs, "\033[0m")
 		fmt.Println(msgs...)
 	}
