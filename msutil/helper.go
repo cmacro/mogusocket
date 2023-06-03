@@ -1,18 +1,17 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 // Message represents a message from peer, that could be presented in one or
 // more frames. That is, it contains payload of all message fragments and
 // operation code of initial frame for this message.
 type Message struct {
-	OpCode  ws.OpCode
+	OpCode  ms.OpCode
 	Payload []byte
 }
 
@@ -24,13 +23,13 @@ type Message struct {
 // contain those control frames at first, and then result of gluing fragments.
 //
 // TODO(gobwas): add DefaultReader with buffer size options.
-func ReadMessage(r io.Reader, s ws.State, m []Message) ([]Message, error) {
+func ReadMessage(r io.Reader, s ms.State, m []Message) ([]Message, error) {
 	rd := Reader{
 		Source:    r,
 		State:     s,
 		CheckUTF8: true,
-		OnIntermediate: func(hdr ws.Header, src io.Reader) error {
-			bts, err := ioutil.ReadAll(src)
+		OnIntermediate: func(hdr ms.Header, src io.Reader) error {
+			bts, err := io.ReadAll(src)
 			if err != nil {
 				return err
 			}
@@ -51,7 +50,7 @@ func ReadMessage(r io.Reader, s ws.State, m []Message) ([]Message, error) {
 		// Thus we consistent here with io.Reader behavior.
 		_, err = io.ReadFull(&rd, p)
 	} else {
-		// Frame is fragmented, thus use ioutil.ReadAll behavior.
+		// Frame is fragmented, thus use io.ReadAll behavior.
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(&rd)
 		p = buf.Bytes()
@@ -66,14 +65,14 @@ func ReadMessage(r io.Reader, s ws.State, m []Message) ([]Message, error) {
 // represents server side.
 // It is a shortcut for ReadMessage(r, ws.StateServerSide, m).
 func ReadClientMessage(r io.Reader, m []Message) ([]Message, error) {
-	return ReadMessage(r, ws.StateServerSide, m)
+	return ReadMessage(r, ms.StateServerSide, m)
 }
 
 // ReadServerMessage reads next message from r, considering that caller
 // represents client side.
 // It is a shortcut for ReadMessage(r, ws.StateClientSide, m).
 func ReadServerMessage(r io.Reader, m []Message) ([]Message, error) {
-	return ReadMessage(r, ws.StateClientSide, m)
+	return ReadMessage(r, ms.StateClientSide, m)
 }
 
 // ReadData is a helper function that reads next data (non-control) message
@@ -84,8 +83,8 @@ func ReadServerMessage(r io.Reader, m []Message) ([]Message, error) {
 //
 // Note this may handle and write control frames into the writer part of a
 // given io.ReadWriter.
-func ReadData(rw io.ReadWriter, s ws.State) ([]byte, ws.OpCode, error) {
-	return readData(rw, s, ws.OpText|ws.OpBinary)
+func ReadData(rw io.ReadWriter, s ms.State) ([]byte, ms.OpCode, error) {
+	return readData(rw, s, ms.OpText|ms.OpBinary)
 }
 
 // ReadClientData reads next data message from rw, considering that caller
@@ -93,8 +92,8 @@ func ReadData(rw io.ReadWriter, s ws.State) ([]byte, ws.OpCode, error) {
 //
 // Note this may handle and write control frames into the writer part of a
 // given io.ReadWriter.
-func ReadClientData(rw io.ReadWriter) ([]byte, ws.OpCode, error) {
-	return ReadData(rw, ws.StateServerSide)
+func ReadClientData(rw io.ReadWriter) ([]byte, ms.OpCode, error) {
+	return ReadData(rw, ms.StateServerSide)
 }
 
 // ReadClientText reads next text message from rw, considering that caller
@@ -104,7 +103,7 @@ func ReadClientData(rw io.ReadWriter) ([]byte, ws.OpCode, error) {
 // Note this may handle and write control frames into the writer part of a
 // given io.ReadWriter.
 func ReadClientText(rw io.ReadWriter) ([]byte, error) {
-	p, _, err := readData(rw, ws.StateServerSide, ws.OpText)
+	p, _, err := readData(rw, ms.StateServerSide, ms.OpText)
 	return p, err
 }
 
@@ -115,7 +114,7 @@ func ReadClientText(rw io.ReadWriter) ([]byte, error) {
 // Note this may handle and write control frames into the writer part of a given
 // io.ReadWriter.
 func ReadClientBinary(rw io.ReadWriter) ([]byte, error) {
-	p, _, err := readData(rw, ws.StateServerSide, ws.OpBinary)
+	p, _, err := readData(rw, ms.StateServerSide, ms.OpBinary)
 	return p, err
 }
 
@@ -124,8 +123,8 @@ func ReadClientBinary(rw io.ReadWriter) ([]byte, error) {
 //
 // Note this may handle and write control frames into the writer part of a
 // given io.ReadWriter.
-func ReadServerData(rw io.ReadWriter) ([]byte, ws.OpCode, error) {
-	return ReadData(rw, ws.StateClientSide)
+func ReadServerData(rw io.ReadWriter) ([]byte, ms.OpCode, error) {
+	return ReadData(rw, ms.StateClientSide)
 }
 
 // ReadServerText reads next text message from rw, considering that caller
@@ -135,7 +134,7 @@ func ReadServerData(rw io.ReadWriter) ([]byte, ws.OpCode, error) {
 // Note this may handle and write control frames into the writer part of a given
 // io.ReadWriter.
 func ReadServerText(rw io.ReadWriter) ([]byte, error) {
-	p, _, err := readData(rw, ws.StateClientSide, ws.OpText)
+	p, _, err := readData(rw, ms.StateClientSide, ms.OpText)
 	return p, err
 }
 
@@ -146,7 +145,7 @@ func ReadServerText(rw io.ReadWriter) ([]byte, error) {
 // Note this may handle and write control frames into the writer part of a
 // given io.ReadWriter.
 func ReadServerBinary(rw io.ReadWriter) ([]byte, error) {
-	p, _, err := readData(rw, ws.StateClientSide, ws.OpBinary)
+	p, _, err := readData(rw, ms.StateClientSide, ms.OpBinary)
 	return p, err
 }
 
@@ -157,44 +156,44 @@ func ReadServerBinary(rw io.ReadWriter) ([]byte, error) {
 // cipher must be made.
 //
 // If you want to write message in fragmented frames, use Writer instead.
-func WriteMessage(w io.Writer, s ws.State, op ws.OpCode, p []byte) error {
+func WriteMessage(w io.Writer, s ms.State, op ms.OpCode, p []byte) error {
 	return writeFrame(w, s, op, true, p)
 }
 
 // WriteServerMessage writes message to w, considering that caller
 // represents server side.
-func WriteServerMessage(w io.Writer, op ws.OpCode, p []byte) error {
-	return WriteMessage(w, ws.StateServerSide, op, p)
+func WriteServerMessage(w io.Writer, op ms.OpCode, p []byte) error {
+	return WriteMessage(w, ms.StateServerSide, op, p)
 }
 
 // WriteServerText is the same as WriteServerMessage with
 // ws.OpText.
 func WriteServerText(w io.Writer, p []byte) error {
-	return WriteServerMessage(w, ws.OpText, p)
+	return WriteServerMessage(w, ms.OpText, p)
 }
 
 // WriteServerBinary is the same as WriteServerMessage with
 // ws.OpBinary.
 func WriteServerBinary(w io.Writer, p []byte) error {
-	return WriteServerMessage(w, ws.OpBinary, p)
+	return WriteServerMessage(w, ms.OpBinary, p)
 }
 
 // WriteClientMessage writes message to w, considering that caller
 // represents client side.
-func WriteClientMessage(w io.Writer, op ws.OpCode, p []byte) error {
-	return WriteMessage(w, ws.StateClientSide, op, p)
+func WriteClientMessage(w io.Writer, op ms.OpCode, p []byte) error {
+	return WriteMessage(w, ms.StateClientSide, op, p)
 }
 
 // WriteClientText is the same as WriteClientMessage with
 // ws.OpText.
 func WriteClientText(w io.Writer, p []byte) error {
-	return WriteClientMessage(w, ws.OpText, p)
+	return WriteClientMessage(w, ms.OpText, p)
 }
 
 // WriteClientBinary is the same as WriteClientMessage with
 // ws.OpBinary.
 func WriteClientBinary(w io.Writer, p []byte) error {
-	return WriteClientMessage(w, ws.OpBinary, p)
+	return WriteClientMessage(w, ms.OpBinary, p)
 }
 
 // HandleClientControlMessage handles control frame from conn and writes
@@ -202,7 +201,7 @@ func WriteClientBinary(w io.Writer, p []byte) error {
 //
 // It considers that caller represents server side.
 func HandleClientControlMessage(conn io.Writer, msg Message) error {
-	return HandleControlMessage(conn, ws.StateServerSide, msg)
+	return HandleControlMessage(conn, ms.StateServerSide, msg)
 }
 
 // HandleServerControlMessage handles control frame from conn and writes
@@ -210,7 +209,7 @@ func HandleClientControlMessage(conn io.Writer, msg Message) error {
 //
 // It considers that caller represents client side.
 func HandleServerControlMessage(conn io.Writer, msg Message) error {
-	return HandleControlMessage(conn, ws.StateClientSide, msg)
+	return HandleControlMessage(conn, ms.StateClientSide, msg)
 }
 
 // HandleControlMessage handles message which was read by ReadMessage()
@@ -218,13 +217,13 @@ func HandleServerControlMessage(conn io.Writer, msg Message) error {
 //
 // That is, it is expected, that payload is already unmasked and frame header
 // were checked by ws.CheckHeader() call.
-func HandleControlMessage(conn io.Writer, state ws.State, msg Message) error {
+func HandleControlMessage(conn io.Writer, state ms.State, msg Message) error {
 	return (ControlHandler{
 		DisableSrcCiphering: true,
 		Src:                 bytes.NewReader(msg.Payload),
 		Dst:                 conn,
 		State:               state,
-	}).Handle(ws.Header{
+	}).Handle(ms.Header{
 		Length: int64(len(msg.Payload)),
 		OpCode: msg.OpCode,
 		Fin:    true,
@@ -234,8 +233,8 @@ func HandleControlMessage(conn io.Writer, state ws.State, msg Message) error {
 
 // ControlFrameHandler returns FrameHandlerFunc for handling control frames.
 // For more info see ControlHandler docs.
-func ControlFrameHandler(w io.Writer, state ws.State) FrameHandlerFunc {
-	return func(h ws.Header, r io.Reader) error {
+func ControlFrameHandler(w io.Writer, state ms.State) FrameHandlerFunc {
+	return func(h ms.Header, r io.Reader) error {
 		return (ControlHandler{
 			DisableSrcCiphering: true,
 			Src:                 r,
@@ -245,7 +244,7 @@ func ControlFrameHandler(w io.Writer, state ws.State) FrameHandlerFunc {
 	}
 }
 
-func readData(rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, ws.OpCode, error) {
+func readData(rw io.ReadWriter, s ms.State, want ms.OpCode) ([]byte, ms.OpCode, error) {
 	controlHandler := ControlFrameHandler(rw, s)
 	rd := Reader{
 		Source:          rw,
@@ -272,7 +271,7 @@ func readData(rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, ws.OpCode, 
 			continue
 		}
 
-		bts, err := ioutil.ReadAll(&rd)
+		bts, err := io.ReadAll(&rd)
 
 		return bts, hdr.OpCode, err
 	}

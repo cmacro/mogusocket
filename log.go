@@ -6,6 +6,7 @@ package mogusocket
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -83,22 +84,22 @@ func (s *stdoutLogger) outputf(level, msg string, args ...interface{}) {
 	if len(args) > 0 {
 		outmsg = fmt.Sprintf(msg, args...)
 	}
-	fmt.Print(colorStart, "[", s.mod, " ", level, "] ")
-	fmt.Println(outmsg, colorReset)
+	log.Print(colorStart, "[", s.mod, " ", level, "] ", outmsg, colorReset)
+	// log.Println(outmsg, colorReset)
+	// log.Print(v ...any)
 }
 
 func (s *stdoutLogger) output(level string, msgs ...interface{}) {
 	if levelToInt[level] < s.min {
 		return
 	}
-	if !s.color {
-		fmt.Print("[", s.mod, " ", level, "] ")
-		fmt.Println(msgs...)
-	} else {
-		fmt.Print(colors[level], "[", s.mod, " ", level, "] ")
-		msgs = append(msgs, "\033[0m")
-		fmt.Println(msgs...)
+	var colorStart, colorReset string
+	if s.color {
+		colorStart = colors[level]
+		colorReset = "\033[0m"
 	}
+	outmsg := fmt.Sprintln(msgs...)
+	log.Print(colorStart, "[", s.mod, " ", level, "] ", outmsg[:len(outmsg)-1], colorReset)
 }
 
 func (s *stdoutLogger) Fatalf(msg string, args ...interface{}) {

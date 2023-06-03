@@ -12,22 +12,27 @@ import (
 	"strings"
 )
 
-func NewServer(addr string, log Logger) *Server {
+func NewServer(addr string, connhandler ConnectHandler, log Logger) *Server {
 	return &Server{
-		addr:   addr,
-		Logger: log,
+		addr:        addr,
+		Logger:      log,
+		connHandler: connhandler,
 	}
 }
 
 type Server struct {
 	Logger
-	addr string
-	ConnectHandler
+	addr        string
+	connHandler ConnectHandler
 }
 
 type Addr struct {
 	Network string
 	Address string
+}
+
+func (u *Addr) Data() (n string, a string) {
+	return u.Network, u.Address
 }
 
 func ParserAddr(a string) (*Addr, error) {
@@ -104,14 +109,8 @@ func (s *Server) handleAccept(ctx context.Context, ln net.Listener) {
 						s.Info("conn close", conn.RemoteAddr().String())
 					}
 				}()
-				s.handleConnection(ctx, conn)
+				s.connHandler.Run(ctx, conn)
 			}()
 		}
 	}
-}
-
-func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
-	// dst Writer, src Reader
-
-	<-ctx.Done()
 }

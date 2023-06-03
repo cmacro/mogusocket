@@ -1,19 +1,18 @@
-package wsutil
+package msutil
 
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"strconv"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 	"github.com/gobwas/pool/pbytes"
 )
 
 // ClosedError returned when peer has closed the connection with appropriate
 // code and a textual reason.
 type ClosedError struct {
-	Code   ws.StatusCode
+	Code   ms.StatusCode
 	Reason string
 }
 
@@ -36,10 +35,10 @@ func (err ClosedError) Error() string {
 type ControlHandler struct {
 	Src   io.Reader
 	Dst   io.Writer
-	State ws.State
+	State ms.State
 
 	// DisableSrcCiphering disables unmasking payload data read from Src.
-	// It is useful when wsutil.Reader is used or when frame payload already
+	// It is useful when msutil.Reader is used or when frame payload already
 	// pulled and ciphered out from the connection (and introduced by
 	// bytes.Reader, for example).
 	DisableSrcCiphering bool
@@ -54,13 +53,13 @@ var ErrNotControlFrame = errors.New("not a control frame")
 //
 // It returns ErrNotControlFrame when given header is not of ws.OpClose,
 // ws.OpPing or ws.OpPong operation code.
-func (c ControlHandler) Handle(h ws.Header) error {
+func (c ControlHandler) Handle(h ms.Header) error {
 	switch h.OpCode {
-	case ws.OpPing:
+	case ms.OpPing:
 		return c.HandlePing(h)
-	case ws.OpPong:
+	case ms.OpPong:
 		return c.HandlePong(h)
-	case ws.OpClose:
+	case ms.OpClose:
 		return c.HandleClose(h)
 	}
 	return ErrNotControlFrame
@@ -68,20 +67,20 @@ func (c ControlHandler) Handle(h ws.Header) error {
 
 // HandlePing handles ping frame and writes specification compatible response
 // to the c.Dst.
-func (c ControlHandler) HandlePing(h ws.Header) error {
+func (c ControlHandler) HandlePing(h ms.Header) error {
 	if h.Length == 0 {
 		// The most common case when ping is empty.
 		// Note that when sending masked frame the mask for empty payload is
 		// just four zero bytes.
-		return ws.WriteHeader(c.Dst, ws.Header{
+		return ms.WriteHeader(c.Dst, ms.Header{
 			Fin:    true,
-			OpCode: ws.OpPong,
+			OpCode: ms.OpPong,
 			Masked: c.State.ClientSide(),
 		})
 	}
 
 	// In other way reply with Pong frame with copied payload.
-	p := pbytes.GetLen(int(h.Length) + ws.HeaderSize(ws.Header{
+	p := pbytes.GetLen(int(h.Length) + ms.HeaderSize(ms.Header{
 		Length: h.Length,
 		Masked: c.State.ClientSide(),
 	}))
@@ -96,7 +95,7 @@ func (c ControlHandler) HandlePing(h ws.Header) error {
 	//
 	// NOTE: We prefer ControlWriter with preallocated buffer to
 	// ws.WriteHeader because it performs one syscall instead of two.
-	w := NewControlWriterBuffer(c.Dst, c.State, ws.OpPong, p)
+	w := NewControlWriterBuffer(c.Dst, c.State, ms.OpPong, p)
 	r := c.Src
 	if c.State.ServerSide() && !c.DisableSrcCiphering {
 		r = NewCipherReader(r, h.Mask)
@@ -111,7 +110,7 @@ func (c ControlHandler) HandlePing(h ws.Header) error {
 }
 
 // HandlePong handles pong frame by discarding it.
-func (c ControlHandler) HandlePong(h ws.Header) error {
+func (c ControlHandler) HandlePong(h ms.Header) error {
 	if h.Length == 0 {
 		return nil
 	}
@@ -123,18 +122,18 @@ func (c ControlHandler) HandlePong(h ws.Header) error {
 	// A Pong frame MAY be sent unsolicited. This serves as a
 	// unidirectional heartbeat. A response to an unsolicited Pong frame
 	// is not expected.
-	_, err := io.CopyBuffer(ioutil.Discard, c.Src, buf)
+	_, err := io.CopyBuffer(io.Discard, c.Src, buf)
 
 	return err
 }
 
 // HandleClose handles close frame, makes protocol validity checks and writes
 // specification compatible response to the c.Dst.
-func (c ControlHandler) HandleClose(h ws.Header) error {
+func (c ControlHandler) HandleClose(h ms.Header) error {
 	if h.Length == 0 {
-		err := ws.WriteHeader(c.Dst, ws.Header{
+		err := ms.WriteHeader(c.Dst, ms.Header{
 			Fin:    true,
-			OpCode: ws.OpClose,
+			OpCode: ms.OpClose,
 			Masked: c.State.ClientSide(),
 		})
 		if err != nil {
@@ -148,12 +147,12 @@ func (c ControlHandler) HandleClose(h ws.Header) error {
 		//
 		// See https://tools.ietf.org/html/rfc6455#section-7.1.5
 		return ClosedError{
-			Code: ws.StatusNoStatusRcvd,
+			Code: ms.StatusNoStatusRcvd,
 		}
 	}
 
 	// Prepare bytes both for reading reason and sending response.
-	p := pbytes.GetLen(int(h.Length) + ws.HeaderSize(ws.Header{
+	p := pbytes.GetLen(int(h.Length) + ms.HeaderSize(ms.Header{
 		Length: h.Length,
 		Masked: c.State.ClientSide(),
 	}))
@@ -170,8 +169,8 @@ func (c ControlHandler) HandleClose(h ws.Header) error {
 		return err
 	}
 
-	code, reason := ws.ParseCloseFrameData(subp)
-	if err := ws.CheckCloseFrameData(code, reason); err != nil {
+	code, reason := ms.ParseCloseFrameData(subp)
+	if err := ms.CheckCloseFrameData(code, reason); err != nil {
 		// Here we could not use the prepared bytes because there is no
 		// guarantee that it may fit our protocol error closure code and a
 		// reason.
@@ -188,7 +187,7 @@ func (c ControlHandler) HandleClose(h ws.Header) error {
 	//
 	// NOTE: We prefer ControlWriter with preallocated buffer to
 	// ws.WriteHeader because it performs one syscall instead of two.
-	w := NewControlWriterBuffer(c.Dst, c.State, ws.OpClose, p)
+	w := NewControlWriterBuffer(c.Dst, c.State, ms.OpClose, p)
 
 	// RFC6455#5.5.1:
 	// If an endpoint receives a Close frame and did not previously
@@ -209,11 +208,11 @@ func (c ControlHandler) HandleClose(h ws.Header) error {
 }
 
 func (c ControlHandler) closeWithProtocolError(reason error) error {
-	f := ws.NewCloseFrame(ws.NewCloseFrameBody(
-		ws.StatusProtocolError, reason.Error(),
+	f := ms.NewCloseFrame(ms.NewCloseFrameBody(
+		ms.StatusProtocolError, reason.Error(),
 	))
 	if c.State.ClientSide() {
-		ws.MaskFrameInPlace(f)
+		ms.MaskFrameInPlace(f)
 	}
-	return ws.WriteFrame(c.Dst, f)
+	return ms.WriteFrame(c.Dst, f)
 }

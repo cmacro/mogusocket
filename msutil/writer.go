@@ -1,10 +1,10 @@
-package wsutil
+package msutil
 
 import (
 	"fmt"
 	"io"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 	"github.com/gobwas/pool"
 	"github.com/gobwas/pool/pbytes"
 )
@@ -42,10 +42,10 @@ type ControlWriter struct {
 
 // NewControlWriter contains ControlWriter with Writer inside whose buffer size
 // is at most ws.MaxControlFramePayloadSize + ws.MaxHeaderSize.
-func NewControlWriter(dest io.Writer, state ws.State, op ws.OpCode) *ControlWriter {
+func NewControlWriter(dest io.Writer, state ms.State, op ms.OpCode) *ControlWriter {
 	return &ControlWriter{
-		w:     NewWriterSize(dest, state, op, ws.MaxControlFramePayloadSize),
-		limit: ws.MaxControlFramePayloadSize,
+		w:     NewWriterSize(dest, state, op, ms.MaxControlFramePayloadSize),
+		limit: ms.MaxControlFramePayloadSize,
 	}
 }
 
@@ -56,8 +56,8 @@ func NewControlWriter(dest io.Writer, state ws.State, op ws.OpCode) *ControlWrit
 // (ws.MaxControlFramePayloadSize + x) bytes of buf will be used.
 //
 // It panics if len(buf) <= ws.MinHeaderSize + x.
-func NewControlWriterBuffer(dest io.Writer, state ws.State, op ws.OpCode, buf []byte) *ControlWriter {
-	max := ws.MaxControlFramePayloadSize + headerSize(state, ws.MaxControlFramePayloadSize)
+func NewControlWriterBuffer(dest io.Writer, state ms.State, op ms.OpCode, buf []byte) *ControlWriter {
+	max := ms.MaxControlFramePayloadSize + headerSize(state, ms.MaxControlFramePayloadSize)
 	if len(buf) > max {
 		buf = buf[:max]
 	}
@@ -95,7 +95,7 @@ var writers = pool.New(128, 65536)
 //
 // If you have your own bytes buffer pool you could use NewWriterBuffer to use
 // pooled bytes in writer.
-func GetWriter(dest io.Writer, state ws.State, op ws.OpCode, n int) *Writer {
+func GetWriter(dest io.Writer, state ms.State, op ms.OpCode, n int) *Writer {
 	x, m := writers.Get(n)
 	if x != nil {
 		w := x.(*Writer)
@@ -135,10 +135,10 @@ type Writer struct {
 	dest io.Writer
 
 	// op specifies the WebSocket operation code used in flushed frames.
-	op ws.OpCode
+	op ms.OpCode
 
 	// state specifies the state of the Writer.
-	state ws.State
+	state ms.State
 
 	// extensions is a list of negotiated extensions for writer Dest.
 	// It is used to meet the specs and set appropriate bits in fragment
@@ -166,7 +166,7 @@ type Writer struct {
 }
 
 // NewWriter returns a new Writer whose buffer has the DefaultWriteBuffer size.
-func NewWriter(dest io.Writer, state ws.State, op ws.OpCode) *Writer {
+func NewWriter(dest io.Writer, state ms.State, op ms.OpCode) *Writer {
 	return NewWriterBufferSize(dest, state, op, 0)
 }
 
@@ -175,7 +175,7 @@ func NewWriter(dest io.Writer, state ws.State, op ws.OpCode) *Writer {
 // Write() is called on empty Writer with len(p) > n.
 //
 // If n <= 0 then the default buffer size is used as Writer's buffer size.
-func NewWriterSize(dest io.Writer, state ws.State, op ws.OpCode, n int) *Writer {
+func NewWriterSize(dest io.Writer, state ms.State, op ms.OpCode, n int) *Writer {
 	if n > 0 {
 		n += headerSize(state, n)
 	}
@@ -189,8 +189,8 @@ func NewWriterSize(dest io.Writer, state ws.State, op ws.OpCode, n int) *Writer 
 // [ws.MinHeaderSize,ws.MaxHeaderSize]. That is, frames flushed by Writer
 // will not have payload length equal to n, except the case when Write() is
 // called on empty Writer with len(p) > n.
-func NewWriterBufferSize(dest io.Writer, state ws.State, op ws.OpCode, n int) *Writer {
-	if n <= ws.MinHeaderSize {
+func NewWriterBufferSize(dest io.Writer, state ms.State, op ms.OpCode, n int) *Writer {
+	if n <= ms.MinHeaderSize {
 		n = DefaultWriteBuffer
 	}
 	return NewWriterBuffer(dest, state, op, make([]byte, n))
@@ -205,7 +205,7 @@ func NewWriterBufferSize(dest io.Writer, state ws.State, op ws.OpCode, n int) *W
 // header data.
 //
 // It panics if len(buf) is too small to fit header and payload data.
-func NewWriterBuffer(dest io.Writer, state ws.State, op ws.OpCode, buf []byte) *Writer {
+func NewWriterBuffer(dest io.Writer, state ms.State, op ms.OpCode, buf []byte) *Writer {
 	w := &Writer{
 		dest:  dest,
 		state: state,
@@ -219,7 +219,7 @@ func NewWriterBuffer(dest io.Writer, state ws.State, op ws.OpCode, buf []byte) *
 func (w *Writer) initBuf() {
 	offset := reserve(w.state, len(w.raw))
 	if len(w.raw) <= offset {
-		panic("wsutil: writer buffer is too small")
+		panic("msutil: writer buffer is too small")
 	}
 	w.buf = w.raw[offset:]
 }
@@ -227,7 +227,7 @@ func (w *Writer) initBuf() {
 // Reset resets Writer as it was created by New() methods.
 // Note that Reset does reset extensions and other options was set after
 // Writer initialization.
-func (w *Writer) Reset(dest io.Writer, state ws.State, op ws.OpCode) {
+func (w *Writer) Reset(dest io.Writer, state ms.State, op ms.OpCode) {
 	w.dest = dest
 	w.state = state
 	w.op = op
@@ -244,7 +244,7 @@ func (w *Writer) Reset(dest io.Writer, state ws.State, op ws.OpCode) {
 // ResetOp is an quick version of Reset().
 // ResetOp does reset unwritten fragments and does not reset results of
 // SetExtensions() or DisableFlush() methods.
-func (w *Writer) ResetOp(op ws.OpCode) {
+func (w *Writer) ResetOp(op ms.OpCode) {
 	w.op = op
 	w.n = 0
 	w.dirty = false
@@ -363,7 +363,7 @@ func (w *Writer) Grow(n int) {
 		cap = size - nextOffset - buffered
 	}
 	if size < len(w.raw) {
-		panic("wsutil: buffer grow leads to its reduce")
+		panic("msutil: buffer grow leads to its reduce")
 	}
 	if size == len(w.raw) {
 		return
@@ -384,8 +384,8 @@ func (w *Writer) WriteThrough(p []byte) (n int, err error) {
 		return 0, ErrNotEmpty
 	}
 
-	var frame ws.Frame
-	frame.Header = ws.Header{
+	var frame ms.Frame
+	frame.Header = ms.Header{
 		OpCode: w.opCode(),
 		Fin:    false,
 		Length: int64(len(p)),
@@ -403,12 +403,12 @@ func (w *Writer) WriteThrough(p []byte) (n int, err error) {
 		copy(payload, p)
 
 		frame.Payload = payload
-		frame = ws.MaskFrameInPlace(frame)
+		frame = ms.MaskFrameInPlace(frame)
 	} else {
 		frame.Payload = p
 	}
 
-	w.err = ws.WriteFrame(w.dest, frame)
+	w.err = ms.WriteFrame(w.dest, frame)
 	if w.err == nil {
 		n = len(p)
 	}
@@ -496,7 +496,7 @@ func (w *Writer) FlushFragment() error {
 func (w *Writer) flushFragment(fin bool) (err error) {
 	var (
 		payload = w.buf[:w.n]
-		header  = ws.Header{
+		header  = ms.Header{
 			OpCode: w.opCode(),
 			Fin:    fin,
 			Length: int64(len(payload)),
@@ -510,18 +510,18 @@ func (w *Writer) flushFragment(fin bool) (err error) {
 	}
 	if w.state.ClientSide() {
 		header.Masked = true
-		header.Mask = ws.NewMask()
-		ws.Cipher(payload, header.Mask, 0)
+		header.Mask = ms.NewMask()
+		ms.Cipher(payload, header.Mask, 0)
 	}
 	// Write header to the header segment of the raw buffer.
 	var (
 		offset = len(w.raw) - len(w.buf)
-		skip   = offset - ws.HeaderSize(header)
+		skip   = offset - ms.HeaderSize(header)
 	)
 	buf := bytesWriter{
 		buf: w.raw[skip:offset],
 	}
-	if err := ws.WriteHeader(&buf, header); err != nil {
+	if err := ms.WriteHeader(&buf, header); err != nil {
 		// Must never be reached.
 		panic("dump header error: " + err.Error())
 	}
@@ -529,9 +529,9 @@ func (w *Writer) flushFragment(fin bool) (err error) {
 	return err
 }
 
-func (w *Writer) opCode() ws.OpCode {
+func (w *Writer) opCode() ms.OpCode {
 	if w.fseq > 0 {
-		return ws.OpContinuation
+		return ms.OpContinuation
 	}
 	return w.op
 }
@@ -552,8 +552,8 @@ func (w *bytesWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func writeFrame(w io.Writer, s ws.State, op ws.OpCode, fin bool, p []byte) error {
-	var frame ws.Frame
+func writeFrame(w io.Writer, s ms.State, op ms.OpCode, fin bool, p []byte) error {
+	var frame ms.Frame
 	if s.ClientSide() {
 		// Should copy bytes to prevent corruption of caller data.
 		payload := pbytes.GetLen(len(p))
@@ -561,20 +561,20 @@ func writeFrame(w io.Writer, s ws.State, op ws.OpCode, fin bool, p []byte) error
 
 		copy(payload, p)
 
-		frame = ws.NewFrame(op, fin, payload)
-		frame = ws.MaskFrameInPlace(frame)
+		frame = ms.NewFrame(op, fin, payload)
+		frame = ms.MaskFrameInPlace(frame)
 	} else {
-		frame = ws.NewFrame(op, fin, p)
+		frame = ms.NewFrame(op, fin, p)
 	}
 
-	return ws.WriteFrame(w, frame)
+	return ms.WriteFrame(w, frame)
 }
 
 // reserve calculates number of bytes need to be reserved for frame header.
 //
 // Note that instead of ws.HeaderSize() it does calculation based on the buffer
 // size, not the payload size.
-func reserve(state ws.State, n int) (offset int) {
+func reserve(state ms.State, n int) (offset int) {
 	var mask int
 	if state.ClientSide() {
 		mask = 4
@@ -591,8 +591,8 @@ func reserve(state ws.State, n int) (offset int) {
 
 // headerSize returns number of bytes needed to encode header of a frame with
 // given state and length.
-func headerSize(s ws.State, n int) int {
-	return ws.HeaderSize(ws.Header{
+func headerSize(s ms.State, n int) int {
+	return ms.HeaderSize(ms.Header{
 		Length: int64(n),
 		Masked: s.ClientSide(),
 	})

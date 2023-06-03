@@ -1,11 +1,11 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
 	"io"
 	"testing"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 func TestReadMessageEOF(t *testing.T) {
@@ -24,8 +24,8 @@ func TestReadMessageEOF(t *testing.T) {
 				// successfully reading header bytes frame via ws.ReadHeader()
 				// and non-successfully read of the body.
 				var buf bytes.Buffer
-				f := ws.NewTextFrame([]byte("this part will be lost"))
-				if err := ws.WriteHeader(&buf, f.Header); err != nil {
+				f := ms.NewTextFrame([]byte("this part will be lost"))
+				if err := ms.WriteHeader(&buf, f.Header); err != nil {
 					panic(err)
 				}
 				return &buf
@@ -37,20 +37,20 @@ func TestReadMessageEOF(t *testing.T) {
 				// This case tests that ReadMessage not fail when reading
 				// fragmented messages.
 				var buf bytes.Buffer
-				fs := []ws.Frame{
-					ws.NewFrame(ws.OpText, false, []byte("fragment1")),
-					ws.NewFrame(ws.OpContinuation, false, []byte(",")),
-					ws.NewFrame(ws.OpContinuation, true, []byte("fragment2")),
+				fs := []ms.Frame{
+					ms.NewFrame(ms.OpText, false, []byte("fragment1")),
+					ms.NewFrame(ms.OpContinuation, false, []byte(",")),
+					ms.NewFrame(ms.OpContinuation, true, []byte("fragment2")),
 				}
 				for _, f := range fs {
-					if err := ws.WriteFrame(&buf, f); err != nil {
+					if err := ms.WriteFrame(&buf, f); err != nil {
 						panic(err)
 					}
 				}
 				return &buf
 			},
 			messages: []Message{
-				{ws.OpText, []byte("fragment1,fragment2")},
+				{ms.OpText, []byte("fragment1,fragment2")},
 			},
 		},
 	} {

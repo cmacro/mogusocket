@@ -1,5 +1,5 @@
 /*
-Package wsutil provides utilities for working with WebSocket protocol.
+package msutil provides utilities for working with WebSocket protocol.
 
 Overview:
 
@@ -11,29 +11,29 @@ Overview:
 
 	// Prepare to read payload.
 	r := io.LimitReader(conn, header.Length)
-	r = wsutil.NewCipherReader(r, header.Mask)
-	r = wsutil.NewUTF8Reader(r)
+	r = msutil.NewCipherReader(r, header.Mask)
+	r = msutil.NewUTF8Reader(r)
 
-	payload, err := ioutil.ReadAll(r)
+	payload, err := io.ReadAll(r)
 	if err != nil {
 		// handle err
 	}
 
-You could get the same behavior using just `wsutil.Reader`:
+You could get the same behavior using just `msutil.Reader`:
 
-	r := wsutil.Reader{
+	r := msutil.Reader{
 		Source:    conn,
 		CheckUTF8: true,
 	}
 
-	payload, err := ioutil.ReadAll(r)
+	payload, err := io.ReadAll(r)
 	if err != nil {
 		// handle err
 	}
 
 Or even simplest:
 
-	payload, err := wsutil.ReadClientText(conn)
+	payload, err := msutil.ReadClientText(conn)
 	if err != nil {
 		// handle err
 	}
@@ -42,7 +42,7 @@ Package is also exports tools for buffered writing:
 
 	// Create buffered writer, that will buffer output bytes and send them as
 	// 128-length fragments (with exception on large writes, see the doc).
-	writer := wsutil.NewWriterSize(conn, ws.StateServerSide, ws.OpText, 128)
+	writer := msutil.NewWriterSize(conn, ws.StateServerSide, ws.OpText, 128)
 
 	_, err := io.CopyN(writer, rand.Reader, 100)
 	if err == nil {
@@ -54,4 +54,4 @@ Package is also exports tools for buffered writing:
 
 For more utils and helpers see the documentation.
 */
-package wsutil
+package msutil

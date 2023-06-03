@@ -1,11 +1,10 @@
-package wsutil
+package msutil
 
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 // ErrNoFrameAdvance means that Reader's Read() method was called without
@@ -20,7 +19,7 @@ var ErrFrameTooLarge = errors.New("frame too large")
 // io.Reader.
 //
 // Note that reader represents already unmasked body.
-type FrameHandlerFunc func(ws.Header, io.Reader) error
+type FrameHandlerFunc func(ms.Header, io.Reader) error
 
 // Reader is a wrapper around source io.Reader which represents WebSocket
 // connection. It contains options for reading messages from source.
@@ -32,7 +31,7 @@ type FrameHandlerFunc func(ws.Header, io.Reader) error
 // Note that Reader's methods are not goroutine safe.
 type Reader struct {
 	Source io.Reader
-	State  ws.State
+	State  ms.State
 
 	// SkipHeaderCheck disables checking header bits to be RFC6455 compliant.
 	SkipHeaderCheck bool
@@ -56,7 +55,7 @@ type Reader struct {
 	OnContinuation FrameHandlerFunc
 	OnIntermediate FrameHandlerFunc
 
-	opCode ws.OpCode        // Used to store message op code on fragmentation.
+	opCode ms.OpCode        // Used to store message op code on fragmentation.
 	frame  io.Reader        // Used to as frame reader.
 	raw    io.LimitedReader // Used to discard frames without cipher.
 	utf8   UTF8Reader       // Used to check UTF8 sequences if CheckUTF8 is true.
@@ -64,7 +63,7 @@ type Reader struct {
 
 // NewReader creates new frame reader that reads from r keeping given state to
 // make some protocol validity checks when it needed.
-func NewReader(r io.Reader, s ws.State) *Reader {
+func NewReader(r io.Reader, s ms.State) *Reader {
 	return &Reader{
 		Source: r,
 		State:  s,
@@ -74,13 +73,13 @@ func NewReader(r io.Reader, s ws.State) *Reader {
 // NewClientSideReader is a helper function that calls NewReader with r and
 // ws.StateClientSide.
 func NewClientSideReader(r io.Reader) *Reader {
-	return NewReader(r, ws.StateClientSide)
+	return NewReader(r, ms.StateClientSide)
 }
 
 // NewServerSideReader is a helper function that calls NewReader with r and
 // ws.StateServerSide.
 func NewServerSideReader(r io.Reader) *Reader {
-	return NewReader(r, ws.StateServerSide)
+	return NewReader(r, ms.StateServerSide)
 }
 
 // Read implements io.Reader. It reads the next message payload into p.
@@ -144,7 +143,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 // It discards all frames of fragmented message.
 func (r *Reader) Discard() (err error) {
 	for {
-		_, err = io.Copy(ioutil.Discard, &r.raw)
+		_, err = io.Copy(io.Discard, &r.raw)
 		if err != nil {
 			break
 		}
@@ -164,20 +163,20 @@ func (r *Reader) Discard() (err error) {
 //
 // Note that next NextFrame() call must be done after receiving or discarding
 // all current message bytes.
-func (r *Reader) NextFrame() (hdr ws.Header, err error) {
-	hdr, err = ws.ReadHeader(r.Source)
+func (r *Reader) NextFrame() (hdr ms.Header, err error) {
+	hdr, err = ms.ReadHeader(r.Source)
 	if err == io.EOF && r.fragmented() {
 		// If we are in fragmented state EOF means that is was totally
 		// unexpected.
 		//
 		// NOTE: This is necessary to prevent callers such that
-		// ioutil.ReadAll to receive some amount of bytes without an error.
+		// io.ReadAll to receive some amount of bytes without an error.
 		// ReadAll() ignores an io.EOF error, thus caller may think that
 		// whole message fetched, but actually only part of it.
 		err = io.ErrUnexpectedEOF
 	}
 	if err == nil && !r.SkipHeaderCheck {
-		err = ws.CheckHeader(hdr, r.State)
+		err = ms.CheckHeader(hdr, r.State)
 	}
 	if err != nil {
 		return hdr, err
@@ -213,14 +212,14 @@ func (r *Reader) NextFrame() (hdr ws.Header, err error) {
 			}
 			if err == nil {
 				// Ensure that src is empty.
-				_, err = io.Copy(ioutil.Discard, &r.raw)
+				_, err = io.Copy(io.Discard, &r.raw)
 			}
 			return hdr, err
 		}
 	} else {
 		r.opCode = hdr.OpCode
 	}
-	if r.CheckUTF8 && (hdr.OpCode == ws.OpText || (r.fragmented() && r.opCode == ws.OpText)) {
+	if r.CheckUTF8 && (hdr.OpCode == ms.OpText || (r.fragmented() && r.opCode == ms.OpText)) {
 		r.utf8.Source = frame
 		frame = &r.utf8
 	}
@@ -228,16 +227,16 @@ func (r *Reader) NextFrame() (hdr ws.Header, err error) {
 	// Save reader with ciphering and other streaming checks.
 	r.frame = frame
 
-	if hdr.OpCode == ws.OpContinuation {
+	if hdr.OpCode == ms.OpContinuation {
 		if cb := r.OnContinuation; cb != nil {
 			err = cb(hdr, frame)
 		}
 	}
 
 	if hdr.Fin {
-		r.State = r.State.Clear(ws.StateFragmented)
+		r.State = r.State.Clear(ms.StateFragmented)
 	} else {
-		r.State = r.State.Set(ws.StateFragmented)
+		r.State = r.State.Set(ms.StateFragmented)
 	}
 
 	return hdr, err
@@ -276,7 +275,7 @@ func (r *Reader) reset() {
 // NextReader() the ping frame will be dropped without any notice. To handle
 // this rare, but possible situation (and if you do not know exactly which
 // frames peer could send), you could use Reader with OnIntermediate field set.
-func NextReader(r io.Reader, s ws.State) (ws.Header, io.Reader, error) {
+func NextReader(r io.Reader, s ms.State) (ms.Header, io.Reader, error) {
 	rd := &Reader{
 		Source: r,
 		State:  s,

@@ -1,4 +1,4 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
@@ -7,10 +7,11 @@ import (
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"unsafe"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 // TODO(gobwas): test NewWriterSize on edge cases for offset.
@@ -20,49 +21,68 @@ const (
 	maxint  = int(^uint(1 << (bitsize - 1)))
 )
 
+func TestIOCopy(t *testing.T) {
+	const client = ms.StateClientSide
+	var buf bytes.Buffer
+	w := NewControlWriter(&buf, client, ms.OpText)
+	n, err := io.Copy(w, strings.NewReader("abc"))
+	if err == nil {
+		err = w.Flush()
+	}
+	if err != nil {
+		t.Error(err)
+	}
+	if n == 0 {
+		t.Error("failed write", n)
+	}
+	if buf.String() == "abc" {
+		t.Error("write invalid")
+	}
+}
+
 func TestControlWriter(t *testing.T) {
 	const (
-		server = ws.StateServerSide
-		client = ws.StateClientSide
+		server = ms.StateServerSide
+		client = ms.StateClientSide
 	)
 	for _, test := range []struct {
 		name  string
 		size  int
 		write []byte
-		state ws.State
-		op    ws.OpCode
-		exp   ws.Frame
+		state ms.State
+		op    ms.OpCode
+		exp   ms.Frame
 		err   bool
 	}{
 		{
 			state: server,
-			op:    ws.OpPing,
-			exp:   ws.NewPingFrame(nil),
+			op:    ms.OpPing,
+			exp:   ms.NewPingFrame(nil),
 		},
 		{
 			write: []byte("0123456789"),
 			state: server,
-			op:    ws.OpPing,
-			exp:   ws.NewPingFrame([]byte("0123456789")),
+			op:    ms.OpPing,
+			exp:   ms.NewPingFrame([]byte("0123456789")),
 		},
 		{
 			size:  10 + reserve(server, 10),
 			write: []byte("0123456789"),
 			state: server,
-			op:    ws.OpPing,
-			exp:   ws.NewPingFrame([]byte("0123456789")),
+			op:    ms.OpPing,
+			exp:   ms.NewPingFrame([]byte("0123456789")),
 		},
 		{
 			size:  10 + reserve(server, 10),
 			write: []byte("0123456789a"),
 			state: server,
-			op:    ws.OpPing,
+			op:    ms.OpPing,
 			err:   true,
 		},
 		{
-			write: bytes.Repeat([]byte{'x'}, ws.MaxControlFramePayloadSize+1),
+			write: bytes.Repeat([]byte{'x'}, ms.MaxControlFramePayloadSize+1),
 			state: server,
-			op:    ws.OpPing,
+			op:    ms.OpPing,
 			err:   true,
 		},
 	} {
@@ -91,7 +111,7 @@ func TestControlWriter(t *testing.T) {
 				return
 			}
 
-			act, err := ws.ReadFrame(&buf)
+			act, err := ms.ReadFrame(&buf)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,12 +128,12 @@ func TestControlWriter(t *testing.T) {
 type reserveTestCase struct {
 	name      string
 	buf       int
-	state     ws.State
+	state     ms.State
 	expOffset int
 	panic     bool
 }
 
-func genReserveTestCases(s ws.State, n, m, exp int) []reserveTestCase {
+func genReserveTestCases(s ms.State, n, m, exp int) []reserveTestCase {
 	ret := make([]reserveTestCase, m-n)
 	for i := n; i < m; i++ {
 		var suffix string
@@ -159,19 +179,19 @@ var reserveTestCases = []reserveTestCase{
 	{
 		name:      "len7 masked",
 		buf:       int(len7) + 6,
-		state:     ws.StateClientSide,
+		state:     ms.StateClientSide,
 		expOffset: 6,
 	},
 	{
 		name:      "len16 masked",
 		buf:       int(len16) + 8,
-		state:     ws.StateClientSide,
+		state:     ms.StateClientSide,
 		expOffset: 8,
 	},
 	{
 		name:      "maxint masked",
 		buf:       maxint,
-		state:     ws.StateClientSide,
+		state:     ms.StateClientSide,
 		expOffset: 14,
 	},
 	{
@@ -192,7 +212,7 @@ func TestNewWriterBuffer(t *testing.T) {
 		reserveTestCase{
 			name:  "panic",
 			buf:   6,
-			state: ws.StateClientSide,
+			state: ms.StateClientSide,
 			panic: true,
 		},
 	)
@@ -200,9 +220,9 @@ func TestNewWriterBuffer(t *testing.T) {
 	cases = append(cases, genReserveTestCases(0, int(len16)-4, int(len16)+4, 4)...)
 	cases = append(cases, genReserveTestCases(0, maxint-10, maxint, 10)...)
 
-	cases = append(cases, genReserveTestCases(ws.StateClientSide, int(len7)-6, int(len7)+6, 6)...)
-	cases = append(cases, genReserveTestCases(ws.StateClientSide, int(len16)-8, int(len16)+8, 8)...)
-	cases = append(cases, genReserveTestCases(ws.StateClientSide, maxint-14, maxint, 14)...)
+	cases = append(cases, genReserveTestCases(ms.StateClientSide, int(len7)-6, int(len7)+6, 6)...)
+	cases = append(cases, genReserveTestCases(ms.StateClientSide, int(len16)-8, int(len16)+8, 8)...)
+	cases = append(cases, genReserveTestCases(ms.StateClientSide, maxint-14, maxint, 14)...)
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -230,9 +250,9 @@ func TestWriter(t *testing.T) {
 	for i, test := range []struct {
 		label  string
 		size   int
-		state  ws.State
+		state  ms.State
 		data   [][]byte
-		expFrm []ws.Frame
+		expFrm []ms.Frame
 		expBts []byte
 	}{
 		// No Write(), no frames.
@@ -242,20 +262,20 @@ func TestWriter(t *testing.T) {
 			data: [][]byte{
 				{},
 			},
-			expBts: ws.MustCompileFrame(ws.NewTextFrame(nil)),
+			expBts: ms.MustCompileFrame(ms.NewTextFrame(nil)),
 		},
 		{
 			data: [][]byte{
 				[]byte("hello, world!"),
 			},
-			expBts: ws.MustCompileFrame(ws.NewTextFrame([]byte("hello, world!"))),
+			expBts: ms.MustCompileFrame(ms.NewTextFrame([]byte("hello, world!"))),
 		},
 		{
-			state: ws.StateClientSide,
+			state: ms.StateClientSide,
 			data: [][]byte{
 				[]byte("hello, world!"),
 			},
-			expFrm: []ws.Frame{ws.MaskFrame(ws.NewTextFrame([]byte("hello, world!")))},
+			expFrm: []ms.Frame{ms.MaskFrame(ms.NewTextFrame([]byte("hello, world!")))},
 		},
 		{
 			size: 5,
@@ -266,26 +286,26 @@ func TestWriter(t *testing.T) {
 			},
 			expBts: bytes.Join(
 				bts(
-					ws.MustCompileFrame(ws.Frame{
-						Header: ws.Header{
+					ms.MustCompileFrame(ms.Frame{
+						Header: ms.Header{
 							Fin:    false,
-							OpCode: ws.OpText,
+							OpCode: ms.OpText,
 							Length: 5,
 						},
 						Payload: []byte("hello"),
 					}),
-					ws.MustCompileFrame(ws.Frame{
-						Header: ws.Header{
+					ms.MustCompileFrame(ms.Frame{
+						Header: ms.Header{
 							Fin:    false,
-							OpCode: ws.OpContinuation,
+							OpCode: ms.OpContinuation,
 							Length: 5,
 						},
 						Payload: []byte(", wor"),
 					}),
-					ws.MustCompileFrame(ws.Frame{
-						Header: ws.Header{
+					ms.MustCompileFrame(ms.Frame{
+						Header: ms.Header{
 							Fin:    true,
-							OpCode: ws.OpContinuation,
+							OpCode: ms.OpContinuation,
 							Length: 3,
 						},
 						Payload: []byte("ld!"),
@@ -301,18 +321,18 @@ func TestWriter(t *testing.T) {
 			},
 			expBts: bytes.Join(
 				bts(
-					ws.MustCompileFrame(ws.Frame{
-						Header: ws.Header{
+					ms.MustCompileFrame(ms.Frame{
+						Header: ms.Header{
 							Fin:    false,
-							OpCode: ws.OpText,
+							OpCode: ms.OpText,
 							Length: 13,
 						},
 						Payload: []byte("hello, world!"),
 					}),
-					ws.MustCompileFrame(ws.Frame{
-						Header: ws.Header{
+					ms.MustCompileFrame(ms.Frame{
+						Header: ms.Header{
 							Fin:    true,
-							OpCode: ws.OpContinuation,
+							OpCode: ms.OpContinuation,
 							Length: 0,
 						},
 					}),
@@ -323,7 +343,7 @@ func TestWriter(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%s#%d", test.label, i), func(t *testing.T) {
 			buf := &bytes.Buffer{}
-			w := NewWriterSize(buf, test.state, ws.OpText, test.size)
+			w := NewWriterSize(buf, test.state, ms.OpText, test.size)
 
 			for _, p := range test.data {
 				_, err := w.Write(p)
@@ -363,8 +383,8 @@ func TestWriterLargeWrite(t *testing.T) {
 
 	// Test that even for big writes extensions set their bits.
 	rsv := [3]bool{true, true, false}
-	w.SetExtensions(SendExtensionFunc(func(h ws.Header) (ws.Header, error) {
-		h.Rsv = ws.Rsv(rsv[0], rsv[1], rsv[2])
+	w.SetExtensions(SendExtensionFunc(func(h ms.Header) (ms.Header, error) {
+		h.Rsv = ms.Rsv(rsv[0], rsv[1], rsv[2])
 		return h, nil
 	}))
 
@@ -379,13 +399,13 @@ func TestWriterLargeWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	frame, err := ws.ReadFrame(&dest)
+	frame, err := ms.ReadFrame(&dest)
 	if err != nil {
 		t.Fatalf("can't read frame: %v", err)
 	}
 
 	var act [3]bool
-	act[0], act[1], act[2] = ws.RsvBits(frame.Header.Rsv)
+	act[0], act[1], act[2] = ms.RsvBits(frame.Header.Rsv)
 	if act != rsv {
 		t.Fatalf("unexpected rsv bits sent: %v; extension set %v", act, rsv)
 	}
@@ -427,8 +447,8 @@ func TestWriterGrow(t *testing.T) {
 
 			// Test that even for big writes extensions set their bits.
 			rsv := [3]bool{true, true, false}
-			w.SetExtensions(SendExtensionFunc(func(h ws.Header) (ws.Header, error) {
-				h.Rsv = ws.Rsv(rsv[0], rsv[1], rsv[2])
+			w.SetExtensions(SendExtensionFunc(func(h ms.Header) (ms.Header, error) {
+				h.Rsv = ms.Rsv(rsv[0], rsv[1], rsv[2])
 				return h, nil
 			}))
 
@@ -450,12 +470,12 @@ func TestWriterGrow(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			frame, err := ws.ReadFrame(&dest)
+			frame, err := ms.ReadFrame(&dest)
 			if err != nil {
 				t.Fatalf("can't read frame: %v", err)
 			}
 			var act [3]bool
-			act[0], act[1], act[2] = ws.RsvBits(frame.Header.Rsv)
+			act[0], act[1], act[2] = ms.RsvBits(frame.Header.Rsv)
 			if act != rsv {
 				t.Fatalf("unexpected rsv bits sent: %v; extension set %v", act, rsv)
 			}
@@ -472,21 +492,21 @@ func TestWriterReadFrom(t *testing.T) {
 		chop  int
 		size  int
 		data  []byte
-		exp   []ws.Frame
+		exp   []ms.Frame
 		n     int64
 	}{
 		{
 			chop: 1,
 			size: 1,
 			data: []byte("golang"),
-			exp: []ws.Frame{
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpText}, Payload: []byte{'g'}},
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpContinuation}, Payload: []byte{'o'}},
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpContinuation}, Payload: []byte{'l'}},
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpContinuation}, Payload: []byte{'a'}},
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpContinuation}, Payload: []byte{'n'}},
-				{Header: ws.Header{Fin: false, Length: 1, OpCode: ws.OpContinuation}, Payload: []byte{'g'}},
-				{Header: ws.Header{Fin: true, Length: 0, OpCode: ws.OpContinuation}},
+			exp: []ms.Frame{
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpText}, Payload: []byte{'g'}},
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpContinuation}, Payload: []byte{'o'}},
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpContinuation}, Payload: []byte{'l'}},
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpContinuation}, Payload: []byte{'a'}},
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpContinuation}, Payload: []byte{'n'}},
+				{Header: ms.Header{Fin: false, Length: 1, OpCode: ms.OpContinuation}, Payload: []byte{'g'}},
+				{Header: ms.Header{Fin: true, Length: 0, OpCode: ms.OpContinuation}},
 			},
 			n: 6,
 		},
@@ -494,24 +514,24 @@ func TestWriterReadFrom(t *testing.T) {
 			chop: 1,
 			size: 4,
 			data: []byte("golang"),
-			exp: []ws.Frame{
-				{Header: ws.Header{Fin: false, Length: 4, OpCode: ws.OpText}, Payload: []byte("gola")},
-				{Header: ws.Header{Fin: true, Length: 2, OpCode: ws.OpContinuation}, Payload: []byte("ng")},
+			exp: []ms.Frame{
+				{Header: ms.Header{Fin: false, Length: 4, OpCode: ms.OpText}, Payload: []byte("gola")},
+				{Header: ms.Header{Fin: true, Length: 2, OpCode: ms.OpContinuation}, Payload: []byte("ng")},
 			},
 			n: 6,
 		},
 		{
 			size: 64,
 			data: []byte{},
-			exp: []ws.Frame{
-				{Header: ws.Header{Fin: true, Length: 0, OpCode: ws.OpText}},
+			exp: []ms.Frame{
+				{Header: ms.Header{Fin: true, Length: 0, OpCode: ms.OpText}},
 			},
 			n: 0,
 		},
 	} {
 		t.Run(fmt.Sprintf("%s#%d", test.label, i), func(t *testing.T) {
 			dst := &bytes.Buffer{}
-			wr := NewWriterSize(dst, 0, ws.OpText, test.size)
+			wr := NewWriterSize(dst, 0, ms.OpText, test.size)
 
 			chop := test.chop
 			if chop == 0 {
@@ -558,7 +578,7 @@ func TestWriterWriteCount(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			n := writeCounter{}
-			w := NewWriterSize(&n, 0, ws.OpText, test.cap)
+			w := NewWriterSize(&n, 0, ms.OpText, test.cap)
 
 			for _, n := range test.write {
 				text := bytes.Repeat([]byte{'x'}, n)
@@ -603,10 +623,10 @@ func (w *writeCounter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func frames(p []byte) (ret []ws.Frame) {
+func frames(p []byte) (ret []ms.Frame) {
 	r := bytes.NewReader(p)
 	for stop := false; !stop; {
-		f, err := ws.ReadFrame(r)
+		f, err := ms.ReadFrame(r)
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -618,7 +638,7 @@ func frames(p []byte) (ret []ws.Frame) {
 	return ret
 }
 
-func pretty(f ...ws.Frame) string {
+func pretty(f ...ms.Frame) string {
 	str := "\n"
 	for _, f := range f {
 		str += fmt.Sprintf("\t%#v\n\t%#x (%#q)\n\t----\n", f.Header, f.Payload, f.Payload)
@@ -626,12 +646,12 @@ func pretty(f ...ws.Frame) string {
 	return str
 }
 
-func omitMask(f ws.Frame) ws.Frame {
+func omitMask(f ms.Frame) ms.Frame {
 	if f.Header.Masked {
 		p := make([]byte, int(f.Header.Length))
 		copy(p, f.Payload)
 
-		ws.Cipher(p, f.Header.Mask, 0)
+		ms.Cipher(p, f.Header.Mask, 0)
 
 		f.Header.Mask = [4]byte{0, 0, 0, 0}
 		f.Payload = p
@@ -639,7 +659,7 @@ func omitMask(f ws.Frame) ws.Frame {
 	return f
 }
 
-func omitMasks(f []ws.Frame) []ws.Frame {
+func omitMasks(f []ms.Frame) []ms.Frame {
 	for i := 0; i < len(f); i++ {
 		f[i] = omitMask(f[i])
 	}

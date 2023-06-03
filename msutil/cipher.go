@@ -1,9 +1,9 @@
-package wsutil
+package msutil
 
 import (
 	"io"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 	"github.com/gobwas/pool/pbytes"
 )
 
@@ -32,7 +32,7 @@ func (c *CipherReader) Reset(r io.Reader, mask [4]byte) {
 // initialization to every read byte.
 func (c *CipherReader) Read(p []byte) (n int, err error) {
 	n, err = c.r.Read(p)
-	ws.Cipher(p[:n], c.mask, c.pos)
+	ms.Cipher(p[:n], c.mask, c.pos)
 	c.pos += n
 	return n, err
 }
@@ -64,7 +64,7 @@ func (c *CipherWriter) Write(p []byte) (n int, err error) {
 	defer pbytes.Put(cp)
 
 	copy(cp, p)
-	ws.Cipher(cp, c.mask, c.pos)
+	ms.Cipher(cp, c.mask, c.pos)
 	n, err = c.w.Write(cp)
 	c.pos += n
 

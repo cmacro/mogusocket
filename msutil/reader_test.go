@@ -1,13 +1,12 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 	"unicode/utf8"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 // TODO(gobwas): test continuation discard.
@@ -18,17 +17,17 @@ var eofReader = bytes.NewReader(nil)
 func TestReadFromWithIntermediateControl(t *testing.T) {
 	var buf bytes.Buffer
 
-	ws.MustWriteFrame(&buf, ws.NewFrame(ws.OpText, false, []byte("foo")))
-	ws.MustWriteFrame(&buf, ws.NewPingFrame([]byte("ping")))
-	ws.MustWriteFrame(&buf, ws.NewFrame(ws.OpContinuation, false, []byte("bar")))
-	ws.MustWriteFrame(&buf, ws.NewPongFrame([]byte("pong")))
-	ws.MustWriteFrame(&buf, ws.NewFrame(ws.OpContinuation, true, []byte("baz")))
+	ms.MustWriteFrame(&buf, ms.NewFrame(ms.OpText, false, []byte("foo")))
+	ms.MustWriteFrame(&buf, ms.NewPingFrame([]byte("ping")))
+	ms.MustWriteFrame(&buf, ms.NewFrame(ms.OpContinuation, false, []byte("bar")))
+	ms.MustWriteFrame(&buf, ms.NewPongFrame([]byte("pong")))
+	ms.MustWriteFrame(&buf, ms.NewFrame(ms.OpContinuation, true, []byte("baz")))
 
 	var intermediate [][]byte
 	r := Reader{
 		Source: &buf,
-		OnIntermediate: func(h ws.Header, r io.Reader) error {
-			bts, err := ioutil.ReadAll(r)
+		OnIntermediate: func(h ms.Header, r io.Reader) error {
+			bts, err := io.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -44,16 +43,16 @@ func TestReadFromWithIntermediateControl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exp := ws.Header{
+	exp := ms.Header{
 		Length: 3,
 		Fin:    false,
-		OpCode: ws.OpText,
+		OpCode: ms.OpText,
 	}
 	if act := h; act != exp {
 		t.Fatalf("unexpected NextFrame() header: %+v; want %+v", act, exp)
 	}
 
-	act, err := ioutil.ReadAll(&r)
+	act, err := io.ReadAll(&r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +102,8 @@ func TestReaderNextFrameAndReadEOF(t *testing.T) {
 				// successfully reading header bytes frame via ws.ReadHeader()
 				// and non-successfully read of the body.
 				var buf bytes.Buffer
-				f := ws.NewTextFrame([]byte("this part will be lost"))
-				if err := ws.WriteHeader(&buf, f.Header); err != nil {
+				f := ms.NewTextFrame([]byte("this part will be lost"))
+				if err := ms.WriteHeader(&buf, f.Header); err != nil {
 					panic(err)
 				}
 				return &buf
@@ -115,8 +114,8 @@ func TestReaderNextFrameAndReadEOF(t *testing.T) {
 		{
 			source: func() io.Reader {
 				var buf bytes.Buffer
-				f := ws.NewTextFrame([]byte("foobar"))
-				if err := ws.WriteHeader(&buf, f.Header); err != nil {
+				f := ms.NewTextFrame([]byte("foobar"))
+				if err := ms.WriteHeader(&buf, f.Header); err != nil {
 					panic(err)
 				}
 				buf.WriteString("foo")
@@ -128,8 +127,8 @@ func TestReaderNextFrameAndReadEOF(t *testing.T) {
 		{
 			source: func() io.Reader {
 				var buf bytes.Buffer
-				f := ws.NewFrame(ws.OpText, false, []byte("payload"))
-				if err := ws.WriteFrame(&buf, f); err != nil {
+				f := ms.NewFrame(ms.OpText, false, []byte("payload"))
+				if err := ms.WriteFrame(&buf, f); err != nil {
 					panic(err)
 				}
 				return &buf
@@ -170,8 +169,8 @@ func TestReaderNextFrameAndReadEOF(t *testing.T) {
 func TestMaxFrameSize(t *testing.T) {
 	var buf bytes.Buffer
 	msg := []byte("small frame")
-	f := ws.NewTextFrame(msg)
-	if err := ws.WriteFrame(&buf, f); err != nil {
+	f := ms.NewTextFrame(msg)
+	if err := ms.WriteFrame(&buf, f); err != nil {
 		t.Fatal(err)
 	}
 	r := Reader{
@@ -201,11 +200,11 @@ func TestReaderUTF8(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	ws.WriteFrame(&buf,
-		ws.NewFrame(ws.OpText, false, yo[:1]),
+	ms.WriteFrame(&buf,
+		ms.NewFrame(ms.OpText, false, yo[:1]),
 	)
-	ws.WriteFrame(&buf,
-		ws.NewFrame(ws.OpContinuation, true, yo[1:]),
+	ms.WriteFrame(&buf,
+		ms.NewFrame(ms.OpContinuation, true, yo[1:]),
 	)
 
 	r := Reader{
@@ -215,7 +214,7 @@ func TestReaderUTF8(t *testing.T) {
 	if _, err := r.NextFrame(); err != nil {
 		t.Fatal(err)
 	}
-	bts, err := ioutil.ReadAll(&r)
+	bts, err := io.ReadAll(&r)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -227,79 +226,79 @@ func TestReaderUTF8(t *testing.T) {
 func TestNextReader(t *testing.T) {
 	for _, test := range []struct {
 		name string
-		seq  []ws.Frame
+		seq  []ms.Frame
 		chop int
 		exp  []byte
 		err  error
 	}{
 		{
 			name: "empty",
-			seq:  []ws.Frame{},
+			seq:  []ms.Frame{},
 			err:  io.EOF,
 		},
 		{
 			name: "single",
-			seq: []ws.Frame{
-				ws.NewTextFrame([]byte("Привет, Мир!")),
+			seq: []ms.Frame{
+				ms.NewTextFrame([]byte("Привет, Мир!")),
 			},
 			exp: []byte("Привет, Мир!"),
 		},
 		{
 			name: "single_masked",
-			seq: []ws.Frame{
-				ws.MaskFrame(ws.NewTextFrame([]byte("Привет, Мир!"))),
+			seq: []ms.Frame{
+				ms.MaskFrame(ms.NewTextFrame([]byte("Привет, Мир!"))),
 			},
 			exp: []byte("Привет, Мир!"),
 		},
 		{
 			name: "fragmented",
-			seq: []ws.Frame{
-				ws.NewFrame(ws.OpText, false, []byte("Привет,")),
-				ws.NewFrame(ws.OpContinuation, false, []byte(" о дивный,")),
-				ws.NewFrame(ws.OpContinuation, false, []byte(" новый ")),
-				ws.NewFrame(ws.OpContinuation, true, []byte("Мир!")),
+			seq: []ms.Frame{
+				ms.NewFrame(ms.OpText, false, []byte("Привет,")),
+				ms.NewFrame(ms.OpContinuation, false, []byte(" о дивный,")),
+				ms.NewFrame(ms.OpContinuation, false, []byte(" новый ")),
+				ms.NewFrame(ms.OpContinuation, true, []byte("Мир!")),
 
-				ws.NewTextFrame([]byte("Hello, Brave New World!")),
+				ms.NewTextFrame([]byte("Hello, Brave New World!")),
 			},
 			exp: []byte("Привет, о дивный, новый Мир!"),
 		},
 		{
 			name: "fragmented_masked",
-			seq: []ws.Frame{
-				ws.MaskFrame(ws.NewFrame(ws.OpText, false, []byte("Привет,"))),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, false, []byte(" о дивный,"))),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, false, []byte(" новый "))),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, true, []byte("Мир!"))),
+			seq: []ms.Frame{
+				ms.MaskFrame(ms.NewFrame(ms.OpText, false, []byte("Привет,"))),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, false, []byte(" о дивный,"))),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, false, []byte(" новый "))),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, true, []byte("Мир!"))),
 
-				ws.MaskFrame(ws.NewTextFrame([]byte("Hello, Brave New World!"))),
+				ms.MaskFrame(ms.NewTextFrame([]byte("Hello, Brave New World!"))),
 			},
 			exp: []byte("Привет, о дивный, новый Мир!"),
 		},
 		{
 			name: "fragmented_and_control",
-			seq: []ws.Frame{
-				ws.NewFrame(ws.OpText, false, []byte("Привет,")),
-				ws.NewFrame(ws.OpPing, true, nil),
-				ws.NewFrame(ws.OpContinuation, false, []byte(" о дивный,")),
-				ws.NewFrame(ws.OpPing, true, nil),
-				ws.NewFrame(ws.OpContinuation, false, []byte(" новый ")),
-				ws.NewFrame(ws.OpPing, true, nil),
-				ws.NewFrame(ws.OpPing, true, []byte("ping info")),
-				ws.NewFrame(ws.OpContinuation, true, []byte("Мир!")),
+			seq: []ms.Frame{
+				ms.NewFrame(ms.OpText, false, []byte("Привет,")),
+				ms.NewFrame(ms.OpPing, true, nil),
+				ms.NewFrame(ms.OpContinuation, false, []byte(" о дивный,")),
+				ms.NewFrame(ms.OpPing, true, nil),
+				ms.NewFrame(ms.OpContinuation, false, []byte(" новый ")),
+				ms.NewFrame(ms.OpPing, true, nil),
+				ms.NewFrame(ms.OpPing, true, []byte("ping info")),
+				ms.NewFrame(ms.OpContinuation, true, []byte("Мир!")),
 			},
 			exp: []byte("Привет, о дивный, новый Мир!"),
 		},
 		{
 			name: "fragmented_and_control_mask",
-			seq: []ws.Frame{
-				ws.MaskFrame(ws.NewFrame(ws.OpText, false, []byte("Привет,"))),
-				ws.MaskFrame(ws.NewFrame(ws.OpPing, true, nil)),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, false, []byte(" о дивный,"))),
-				ws.MaskFrame(ws.NewFrame(ws.OpPing, true, nil)),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, false, []byte(" новый "))),
-				ws.MaskFrame(ws.NewFrame(ws.OpPing, true, nil)),
-				ws.MaskFrame(ws.NewFrame(ws.OpPing, true, []byte("ping info"))),
-				ws.MaskFrame(ws.NewFrame(ws.OpContinuation, true, []byte("Мир!"))),
+			seq: []ms.Frame{
+				ms.MaskFrame(ms.NewFrame(ms.OpText, false, []byte("Привет,"))),
+				ms.MaskFrame(ms.NewFrame(ms.OpPing, true, nil)),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, false, []byte(" о дивный,"))),
+				ms.MaskFrame(ms.NewFrame(ms.OpPing, true, nil)),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, false, []byte(" новый "))),
+				ms.MaskFrame(ms.NewFrame(ms.OpPing, true, nil)),
+				ms.MaskFrame(ms.NewFrame(ms.OpPing, true, []byte("ping info"))),
+				ms.MaskFrame(ms.NewFrame(ms.OpContinuation, true, []byte("Мир!"))),
 			},
 			exp: []byte("Привет, о дивный, новый Мир!"),
 		},
@@ -308,7 +307,7 @@ func TestNextReader(t *testing.T) {
 			// Prepare input.
 			buf := &bytes.Buffer{}
 			for _, f := range test.seq {
-				if err := ws.WriteFrame(buf, f); err != nil {
+				if err := ms.WriteFrame(buf, f); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -321,7 +320,7 @@ func TestNextReader(t *testing.T) {
 			var bts []byte
 			_, reader, err := NextReader(conn, 0)
 			if err == nil {
-				bts, err = ioutil.ReadAll(reader)
+				bts, err = io.ReadAll(reader)
 			}
 			if err != test.err {
 				t.Errorf("unexpected error; got %v; want %v", err, test.err)

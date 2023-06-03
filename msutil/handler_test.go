@@ -1,110 +1,110 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
 	"runtime"
 	"testing"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 func TestControlHandler(t *testing.T) {
 	for _, test := range []struct {
 		name  string
-		state ws.State
-		in    ws.Frame
-		out   ws.Frame
+		state ms.State
+		in    ms.Frame
+		out   ms.Frame
 		noOut bool
 		err   error
 	}{
 		{
 			name: "ping",
-			in:   ws.NewPingFrame(nil),
-			out:  ws.NewPongFrame(nil),
+			in:   ms.NewPingFrame(nil),
+			out:  ms.NewPongFrame(nil),
 		},
 		{
 			name: "ping",
-			in:   ws.NewPingFrame([]byte("catch the ball")),
-			out:  ws.NewPongFrame([]byte("catch the ball")),
+			in:   ms.NewPingFrame([]byte("catch the ball")),
+			out:  ms.NewPongFrame([]byte("catch the ball")),
 		},
 		{
 			name:  "ping",
-			state: ws.StateServerSide,
-			in:    ws.MaskFrame(ws.NewPingFrame([]byte("catch the ball"))),
-			out:   ws.NewPongFrame([]byte("catch the ball")),
+			state: ms.StateServerSide,
+			in:    ms.MaskFrame(ms.NewPingFrame([]byte("catch the ball"))),
+			out:   ms.NewPongFrame([]byte("catch the ball")),
 		},
 		{
 			name: "ping",
-			in:   ws.NewPingFrame(bytes.Repeat([]byte{0xfe}, 125)),
-			out:  ws.NewPongFrame(bytes.Repeat([]byte{0xfe}, 125)),
+			in:   ms.NewPingFrame(bytes.Repeat([]byte{0xfe}, 125)),
+			out:  ms.NewPongFrame(bytes.Repeat([]byte{0xfe}, 125)),
 		},
 		{
 			name:  "pong",
-			in:    ws.NewPongFrame(nil),
+			in:    ms.NewPongFrame(nil),
 			noOut: true,
 		},
 		{
 			name:  "pong",
-			in:    ws.NewPongFrame([]byte("caught")),
+			in:    ms.NewPongFrame([]byte("caught")),
 			noOut: true,
 		},
 		{
 			name: "close",
-			in:   ws.NewCloseFrame(nil),
-			out:  ws.NewCloseFrame(nil),
+			in:   ms.NewCloseFrame(nil),
+			out:  ms.NewCloseFrame(nil),
 			err: ClosedError{
-				Code: ws.StatusNoStatusRcvd,
+				Code: ms.StatusNoStatusRcvd,
 			},
 		},
 		{
 			name: "close",
-			in: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "goodbye!",
+			in: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "goodbye!",
 			)),
-			out: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "",
+			out: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "",
 			)),
 			err: ClosedError{
-				Code:   ws.StatusGoingAway,
+				Code:   ms.StatusGoingAway,
 				Reason: "goodbye!",
 			},
 		},
 		{
 			name: "close",
-			in: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "bye",
+			in: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "bye",
 			)),
-			out: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "",
+			out: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "",
 			)),
 			err: ClosedError{
-				Code:   ws.StatusGoingAway,
+				Code:   ms.StatusGoingAway,
 				Reason: "bye",
 			},
 		},
 		{
 			name:  "close",
-			state: ws.StateServerSide,
-			in: ws.MaskFrame(ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "goodbye!",
+			state: ms.StateServerSide,
+			in: ms.MaskFrame(ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "goodbye!",
 			))),
-			out: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusGoingAway, "",
+			out: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusGoingAway, "",
 			)),
 			err: ClosedError{
-				Code:   ws.StatusGoingAway,
+				Code:   ms.StatusGoingAway,
 				Reason: "goodbye!",
 			},
 		},
 		{
 			name: "close",
-			in: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusNormalClosure, string([]byte{0, 200}),
+			in: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusNormalClosure, string([]byte{0, 200}),
 			)),
-			out: ws.NewCloseFrame(ws.NewCloseFrameBody(
-				ws.StatusProtocolError, ws.ErrProtocolInvalidUTF8.Error(),
+			out: ms.NewCloseFrame(ms.NewCloseFrameBody(
+				ms.StatusProtocolError, ms.ErrProtocolInvalidUTF8.Error(),
 			)),
-			err: ws.ErrProtocolInvalidUTF8,
+			err: ms.ErrProtocolInvalidUTF8,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -146,10 +146,10 @@ func TestControlHandler(t *testing.T) {
 			case len(act) > 0 && test.noOut:
 				t.Errorf("unexpected sent frame")
 			default:
-				exp := ws.MustCompileFrame(test.out)
+				exp := ms.MustCompileFrame(test.out)
 				if !bytes.Equal(act, exp) {
-					fa := ws.MustReadFrame(bytes.NewReader(act))
-					fe := ws.MustReadFrame(bytes.NewReader(exp))
+					fa := ms.MustReadFrame(bytes.NewReader(act))
+					fe := ms.MustReadFrame(bytes.NewReader(exp))
 					t.Errorf(
 						"unexpected sent frame:\n\tact: %+v\n\texp: %+v\nbytes:\n\tact: %v\n\texp: %v",
 						fa, fe, act, exp,

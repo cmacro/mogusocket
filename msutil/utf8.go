@@ -1,4 +1,4 @@
-package wsutil
+package msutil
 
 import (
 	"fmt"

@@ -3,17 +3,21 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	"github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
+	"github.com/cmacro/mogusocket/msutil"
 )
 
 var addr = flag.String("listen", "unix:///tmp/ws_testsocket.tmp", "addr to listen")
 
-var mainLog mogusocket.Logger
+var mainLog ms.Logger
 
 func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
 	defer mainLog.Info("close sys signal.")
@@ -33,32 +37,86 @@ func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
 }
 
 func main() {
+
 	flag.Parse()
 
-	mainLog = mogusocket.Stdout("Main", "DEBUG", true)
+	mainLog = ms.Stdout("Main", "DEBUG", true)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	u, _ := mogusocket.ParserAddr(*addr)
+	// ctx, cancel := context.WithCancel(context.Background())
+	u, _ := ms.ParserAddr(*addr)
 	conn, err := net.Dial(u.Network, u.Address)
 	if err != nil {
 		mainLog.Error("connect", err)
 		return
 	}
+	state := ms.StateClientSide
+	r := &msutil.Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: msutil.ControlFrameHandler(conn, state)}
+	// var buf bytes.Buffer
+	w := msutil.NewWriter(conn, state, 0)
+	wh := func(src io.Reader, isText bool) error {
+		opcode := ms.OpText
+		if !isText {
+			opcode = ms.OpBinary
+		}
+		w.Reset(conn, state, opcode)
+		// io.Copy(os.Stdout, r)
+		_, err := io.Copy(w, src)
+		if err == nil {
+			err = w.Flush()
+		}
+		if err != nil {
+			mainLog.Error("connect writer", err)
+		}
+		return err
+	}
+	go func() {
+		for {
+			h, err := r.NextFrame()
+			if err != nil {
+				mainLog.Error("next frame error", err)
+				return
+			}
+			if h.OpCode.IsControl() {
+				continue
+			}
+			// err = section.ReadDump(r, h.OpCode == ms.OpText)
+			payload := make([]byte, h.Length)
+			_, err = io.ReadFull(r, payload)
 
-	// ws := mogusocket.NewServer(*addr, mogusocket.Stdout("Server", "DEBUG", true))
+			if err != nil {
+				mainLog.Info("read dump", err)
+				return
+			}
+			mainLog.Info("read payload:", string(payload))
+		}
+	}()
 
-	// var wg sync.WaitGroup
-	// wg.Add(1)
-	// go func() { defer wg.Done(); ws.Run(ctx) }()
+	readlog := mainLog.Sub("read")
+	// reader := bufio.NewReader(os.Stdin)
+	var text string
 
-	// runSysSignal(ctx, cancel)
+	if err := wh(strings.NewReader("hello"), true); err != nil {
+		readlog.Error("failed send message", err)
+		return
+	}
 
-	// wg.Wait()
-	// <-ctx.Done()
-
-	// time.Sleep(1 * time.Second)
-	// mainLog.Info("closed.")
-	// // http.HandleFunc("/ws", wsHandler)
-	// // http.HandleFunc("/wsutil", wsutilHandler)
+	for {
+		_, err := fmt.Scanln(&text)
+		// text, err := reader.ReadString('\n')
+		if err != nil {
+			readlog.Error("read os stdin", err)
+			return
+		}
+		if text == ".q" {
+			readlog.Info("closed.")
+			return
+		}
+		// strings.Trim()
+		readlog.Info("do send:", text)
+		if err := wh(strings.NewReader(text), true); err != nil {
+			readlog.Error("send message", err)
+			return
+		}
+	}
 
 }

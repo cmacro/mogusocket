@@ -1,13 +1,13 @@
-package wsutil
+package msutil
 
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"reflect"
 	"testing"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
 func TestCipherReader(t *testing.T) {
@@ -28,15 +28,15 @@ func TestCipherReader(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("%s#%d", test.label, i), func(t *testing.T) {
-			mask := ws.NewMask()
+			mask := ms.NewMask()
 			masked := make([]byte, len(test.data))
 			copy(masked, test.data)
-			ws.Cipher(masked, mask, 0)
+			ms.Cipher(masked, mask, 0)
 
 			src := &chopReader{bytes.NewReader(masked), test.chop}
 			rd := NewCipherReader(src, mask)
 
-			bts, err := ioutil.ReadAll(rd)
+			bts, err := io.ReadAll(rd)
 			if err != nil {
 				t.Errorf("unexpected error: %s", err)
 				return

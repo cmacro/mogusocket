@@ -2,31 +2,31 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file
 
-package wsutil
+package msutil
 
 import (
 	"context"
 	"io"
 
-	ws "github.com/cmacro/mogusocket"
+	ms "github.com/cmacro/mogusocket"
 )
 
-func NewContainer(section ws.SectionHandler, log ws.Logger) *Container {
-	return &Container{
-		log:            log,
-		SectionHandler: section,
+func NewConnecter(sections ms.SectionsHandler, log ms.Logger) *Connecter {
+	return &Connecter{
+		log:             log,
+		SectionsHandler: sections,
 	}
 }
 
-type Container struct {
-	log ws.Logger
-	ws.SectionHandler
+type Connecter struct {
+	log ms.Logger
+	ms.SectionsHandler
 }
 
-func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
+func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
 	sectionCtx, sectionCancel := context.WithCancel(ctx)
 
-	state := ws.StateServerSide
+	state := ms.StateServerSide
 	ch := ControlFrameHandler(conn, state)
 	r := &Reader{
 		Source:         conn,
@@ -36,9 +36,9 @@ func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
 	}
 	w := NewWriter(conn, state, 0)
 	wh := func(src io.Reader, isText bool) error {
-		opcode := ws.OpText
+		opcode := ms.OpText
 		if !isText {
-			opcode = ws.OpBinary
+			opcode = ms.OpBinary
 		}
 		w.Reset(conn, state, opcode)
 		_, err := io.Copy(w, r)
@@ -52,13 +52,15 @@ func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
 		return err
 	}
 
-	sectionid := c.SectionHandler.Connect(sectionCtx, wh, sectionCancel)
-	defer func() { c.Close(sectionid); sectionCancel() }()
-
-	if sectionid == 0 {
-		c.log.Info("connection refused")
+	section, err := c.SectionsHandler.Connect(sectionCtx, wh, sectionCancel)
+	if err != nil {
+		c.log.Info("connection refused", err)
 		return
 	}
+	defer func() {
+		c.SectionsHandler.Close(section)
+		sectionCancel()
+	}()
 
 	for {
 		select {
@@ -68,7 +70,11 @@ func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
 		default:
 			h, err := r.NextFrame()
 			if err != nil {
-				c.log.Error("next frame error", err)
+				if err == io.EOF {
+					c.log.Info("closed", section.GetId())
+				} else {
+					c.log.Error("next frame error", err)
+				}
 				return
 			}
 			if h.OpCode.IsControl() {
@@ -78,7 +84,7 @@ func (c *Container) Run(ctx context.Context, conn io.ReadWriter) {
 				}
 				continue
 			}
-			err = c.ReadDump(r)
+			err = section.ReadDump(r, h.OpCode == ms.OpText)
 			if err != nil {
 				c.log.Info("read dump", err)
 				return
