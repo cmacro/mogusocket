@@ -37,12 +37,12 @@ func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
 }
 
 func main() {
-
+	// log.SetFlags(0)
 	flag.Parse()
 
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
-	// ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	u, _ := ms.ParserAddr(*addr)
 	conn, err := net.Dial(u.Network, u.Address)
 	if err != nil {
@@ -70,6 +70,7 @@ func main() {
 		return err
 	}
 	go func() {
+		defer cancel()
 		for {
 			h, err := r.NextFrame()
 			if err != nil {
@@ -92,31 +93,39 @@ func main() {
 	}()
 
 	readlog := mainLog.Sub("read")
-	// reader := bufio.NewReader(os.Stdin)
-	var text string
 
 	if err := wh(strings.NewReader("hello"), true); err != nil {
 		readlog.Error("failed send message", err)
 		return
 	}
 
-	for {
-		_, err := fmt.Scanln(&text)
-		// text, err := reader.ReadString('\n')
-		if err != nil {
-			readlog.Error("read os stdin", err)
-			return
+	go func() {
+		var text string
+		defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				_, err := fmt.Scanln(&text)
+				if err != nil {
+					readlog.Error("read os stdin", err)
+					return
+				}
+				if text == ".q" {
+					readlog.Info("closed.")
+					return
+				}
+				// strings.Trim()
+				readlog.Info("do send:", text)
+				if err := wh(strings.NewReader(text), true); err != nil {
+					readlog.Error("send message", err)
+					return
+				}
+			}
 		}
-		if text == ".q" {
-			readlog.Info("closed.")
-			return
-		}
-		// strings.Trim()
-		readlog.Info("do send:", text)
-		if err := wh(strings.NewReader(text), true); err != nil {
-			readlog.Error("send message", err)
-			return
-		}
-	}
+	}()
+
+	<-ctx.Done()
 
 }

@@ -41,7 +41,7 @@ func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
 			opcode = ms.OpBinary
 		}
 		w.Reset(conn, state, opcode)
-		_, err := io.Copy(w, r)
+		_, err := io.Copy(w, src)
 		if err == nil {
 			err = w.Flush()
 		}

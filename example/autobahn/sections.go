@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 
 	ms "github.com/cmacro/mogusocket"
@@ -69,8 +70,13 @@ func (c *Client) Close() {
 }
 
 func (c *Client) ReadDump(r io.Reader, isText bool) error {
-	c.log.Info("read dump", isText)
-	err := c.writer(r, isText)
+	// var buf bytes.Buffer
+	// io.Copy(&buf, r)
+	b, _ := io.ReadAll(r)
+
+	c.log.Info("read dump", isText, "data:", string(b))
+
+	err := c.writer(strings.NewReader("recv "+string(b)), isText)
 	return err
 }
 
