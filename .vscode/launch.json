@@ -5,13 +5,14 @@
     "version": "0.2.0",
     "configurations": [
 
+
         {
-            "name": "Launch server",
+            "name": "Launch autobahn",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/example/autobahn/",
-            "args": ["-listen=udp://127.0.0.1:9009"]
+            "args": ["-listen=:9001"]
         },
               
         {

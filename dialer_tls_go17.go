@@ -8,7 +8,7 @@ import "crypto/tls"
 func tlsCloneConfig(c *tls.Config) *tls.Config {
 	// NOTE: we copying SessionTicketsDisabled and SessionTicketKey here
 	// without calling inner c.initOnceServer somehow because we only could get
-	// here from the ws.Dialer code, which is obviously a client and makes
+	// here from the ms.Dialer code, which is obviously a client and makes
 	// tls.Client() when it gets new net.Conn.
 	return &tls.Config{
 		Rand:                        c.Rand,
