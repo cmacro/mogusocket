@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	ms "github.com/cmacro/mogusocket"
@@ -44,7 +43,7 @@ func (d *DebugUpgrader) Upgrade(conn io.ReadWriter) (hs ms.Handshake, err error)
 		))
 		if err == nil {
 			// Fulfill the buffer with the response body.
-			io.Copy(ioutil.Discard, req.Body)
+			io.Copy(io.Discard, req.Body)
 			req.Body.Close()
 		}
 		onRequest(buf.Bytes())
