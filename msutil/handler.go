@@ -24,8 +24,8 @@ func (err ClosedError) Error() string {
 // ControlHandler contains logic of handling control frames.
 //
 // The intentional way to use it is to read the next frame header from the
-// connection, optionally check its validity via ws.CheckHeader() and if it is
-// not a ws.OpText of ws.OpBinary (or ws.OpContinuation) – pass it to Handle()
+// connection, optionally check its validity via ms.CheckHeader() and if it is
+// not a ms.OpText of ms.OpBinary (or ms.OpContinuation) – pass it to Handle()
 // method.
 //
 // That is, passed header should be checked to get rid of unexpected errors.
@@ -51,8 +51,8 @@ var ErrNotControlFrame = errors.New("not a control frame")
 // Handle handles control frames regarding to the c.State and writes responses
 // to the c.Dst when needed.
 //
-// It returns ErrNotControlFrame when given header is not of ws.OpClose,
-// ws.OpPing or ws.OpPong operation code.
+// It returns ErrNotControlFrame when given header is not of ms.OpClose,
+// ms.OpPing or ms.OpPong operation code.
 func (c ControlHandler) Handle(h ms.Header) error {
 	switch h.OpCode {
 	case ms.OpPing:
@@ -94,7 +94,7 @@ func (c ControlHandler) HandlePing(h ms.Header) error {
 	// See https://tools.ietf.org/html/rfc6455#section-5.3
 	//
 	// NOTE: We prefer ControlWriter with preallocated buffer to
-	// ws.WriteHeader because it performs one syscall instead of two.
+	// ms.WriteHeader because it performs one syscall instead of two.
 	w := NewControlWriterBuffer(c.Dst, c.State, ms.OpPong, p)
 	r := c.Src
 	if c.State.ServerSide() && !c.DisableSrcCiphering {
@@ -186,7 +186,7 @@ func (c ControlHandler) HandleClose(h ms.Header) error {
 	// See https://tools.ietf.org/html/rfc6455#section-5.3
 	//
 	// NOTE: We prefer ControlWriter with preallocated buffer to
-	// ws.WriteHeader because it performs one syscall instead of two.
+	// ms.WriteHeader because it performs one syscall instead of two.
 	w := NewControlWriterBuffer(c.Dst, c.State, ms.OpClose, p)
 
 	// RFC6455#5.5.1:

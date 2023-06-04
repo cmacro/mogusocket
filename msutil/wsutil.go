@@ -4,7 +4,7 @@ package msutil provides utilities for working with WebSocket protocol.
 Overview:
 
 	// Read masked text message from peer and check utf8 encoding.
-	header, err := ws.ReadHeader(conn)
+	header, err := ms.ReadHeader(conn)
 	if err != nil {
 		// handle err
 	}
@@ -42,7 +42,7 @@ Package is also exports tools for buffered writing:
 
 	// Create buffered writer, that will buffer output bytes and send them as
 	// 128-length fragments (with exception on large writes, see the doc).
-	writer := msutil.NewWriterSize(conn, ws.StateServerSide, ws.OpText, 128)
+	writer := msutil.NewWriterSize(conn, ms.StateServerSide, ms.OpText, 128)
 
 	_, err := io.CopyN(writer, rand.Reader, 100)
 	if err == nil {

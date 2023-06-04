@@ -45,14 +45,14 @@ func main() {
 
 	svrLog := ms.Stdout("Server", "DEBUG", true)
 	connecter := msutil.NewConnecter(NewTestSections(ms.Stdout("Sections", "DEBUG", true)), svrLog.Sub("Connect"))
-	ws := ms.NewServer(*addr, connecter, svrLog)
+	ms := ms.NewServer(*addr, connecter, svrLog)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ws.Run(ctx)
+		ms.Run(ctx)
 		cancel()
 	}()
 

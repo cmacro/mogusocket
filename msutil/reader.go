@@ -71,13 +71,13 @@ func NewReader(r io.Reader, s ms.State) *Reader {
 }
 
 // NewClientSideReader is a helper function that calls NewReader with r and
-// ws.StateClientSide.
+// ms.StateClientSide.
 func NewClientSideReader(r io.Reader) *Reader {
 	return NewReader(r, ms.StateClientSide)
 }
 
 // NewServerSideReader is a helper function that calls NewReader with r and
-// ws.StateServerSide.
+// ms.StateServerSide.
 func NewServerSideReader(r io.Reader) *Reader {
 	return NewReader(r, ms.StateServerSide)
 }

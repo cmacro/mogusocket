@@ -41,7 +41,7 @@ type ControlWriter struct {
 }
 
 // NewControlWriter contains ControlWriter with Writer inside whose buffer size
-// is at most ws.MaxControlFramePayloadSize + ws.MaxHeaderSize.
+// is at most ms.MaxControlFramePayloadSize + ms.MaxHeaderSize.
 func NewControlWriter(dest io.Writer, state ms.State, op ms.OpCode) *ControlWriter {
 	return &ControlWriter{
 		w:     NewWriterSize(dest, state, op, ms.MaxControlFramePayloadSize),
@@ -52,10 +52,10 @@ func NewControlWriter(dest io.Writer, state ms.State, op ms.OpCode) *ControlWrit
 // NewControlWriterBuffer returns a new ControlWriter with buf as a buffer.
 //
 // Note that it reserves x bytes of buf for header data, where x could be
-// ws.MinHeaderSize or ws.MinHeaderSize+4 (depending on state). At most
-// (ws.MaxControlFramePayloadSize + x) bytes of buf will be used.
+// ms.MinHeaderSize or ms.MinHeaderSize+4 (depending on state). At most
+// (ms.MaxControlFramePayloadSize + x) bytes of buf will be used.
 //
-// It panics if len(buf) <= ws.MinHeaderSize + x.
+// It panics if len(buf) <= ms.MinHeaderSize + x.
 func NewControlWriterBuffer(dest io.Writer, state ms.State, op ms.OpCode, buf []byte) *ControlWriter {
 	max := ms.MaxControlFramePayloadSize + headerSize(state, ms.MaxControlFramePayloadSize)
 	if len(buf) > max {
@@ -118,7 +118,7 @@ func PutWriter(w *Writer) {
 // WebSocket frames, not the raw data.
 //
 // Writer writes frames with specified OpCode.
-// It uses ws.State to decide whether the output frames must be masked.
+// It uses ms.State to decide whether the output frames must be masked.
 //
 // Note that it does not check control frame size or other RFC rules.
 // That is, it must be used with special care to write control frames without
@@ -170,7 +170,7 @@ func NewWriter(dest io.Writer, state ms.State, op ms.OpCode) *Writer {
 	return NewWriterBufferSize(dest, state, op, 0)
 }
 
-// NewWriterSize returns a new Writer whose buffer size is at most n + ws.MaxHeaderSize.
+// NewWriterSize returns a new Writer whose buffer size is at most n + ms.MaxHeaderSize.
 // That is, output frames payload length could be up to n, except the case when
 // Write() is called on empty Writer with len(p) > n.
 //
@@ -183,10 +183,10 @@ func NewWriterSize(dest io.Writer, state ms.State, op ms.OpCode, n int) *Writer 
 }
 
 // NewWriterBufferSize returns a new Writer whose buffer size is equal to n.
-// If n <= ws.MinHeaderSize then the default buffer size is used.
+// If n <= ms.MinHeaderSize then the default buffer size is used.
 //
 // Note that Writer will reserve x bytes for header data, where x is in range
-// [ws.MinHeaderSize,ws.MaxHeaderSize]. That is, frames flushed by Writer
+// [ms.MinHeaderSize,ms.MaxHeaderSize]. That is, frames flushed by Writer
 // will not have payload length equal to n, except the case when Write() is
 // called on empty Writer with len(p) > n.
 func NewWriterBufferSize(dest io.Writer, state ms.State, op ms.OpCode, n int) *Writer {
@@ -199,9 +199,9 @@ func NewWriterBufferSize(dest io.Writer, state ms.State, op ms.OpCode, n int) *W
 // NewWriterBuffer returns a new Writer with buf as a buffer.
 //
 // Note that it reserves x bytes of buf for header data, where x is in range
-// [ws.MinHeaderSize,ws.MaxHeaderSize] (depending on state and buf size).
+// [ms.MinHeaderSize,ms.MaxHeaderSize] (depending on state and buf size).
 //
-// You could use ws.HeaderSize() to calculate number of bytes needed to store
+// You could use ms.HeaderSize() to calculate number of bytes needed to store
 // header data.
 //
 // It panics if len(buf) is too small to fit header and payload data.
@@ -572,7 +572,7 @@ func writeFrame(w io.Writer, s ms.State, op ms.OpCode, fin bool, p []byte) error
 
 // reserve calculates number of bytes need to be reserved for frame header.
 //
-// Note that instead of ws.HeaderSize() it does calculation based on the buffer
+// Note that instead of ms.HeaderSize() it does calculation based on the buffer
 // size, not the payload size.
 func reserve(state ms.State, n int) (offset int) {
 	var mask int

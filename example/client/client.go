@@ -42,6 +42,9 @@ func main() {
 
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
+	// mc := msutil.NewClient(*addr, ms.Stdout("Section", "DEBUG", true))
+	// mc.Run()
+
 	u, _ := ms.ParserAddr(*addr)
 	conn, err := net.Dial(u.Data())
 	if err != nil {
@@ -50,7 +53,6 @@ func main() {
 	}
 	state := ms.StateClientSide
 	r := &msutil.Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: msutil.ControlFrameHandler(conn, state)}
-	// var buf bytes.Buffer
 	w := msutil.NewWriter(conn, state, 0)
 	wh := func(src io.Reader, isText bool) error {
 		opcode := ms.OpText

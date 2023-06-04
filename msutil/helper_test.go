@@ -21,7 +21,7 @@ func TestReadMessageEOF(t *testing.T) {
 		{
 			source: func() io.Reader {
 				// This case tests that ReadMessage still fails after
-				// successfully reading header bytes frame via ws.ReadHeader()
+				// successfully reading header bytes frame via ms.ReadHeader()
 				// and non-successfully read of the body.
 				var buf bytes.Buffer
 				f := ms.NewTextFrame([]byte("this part will be lost"))

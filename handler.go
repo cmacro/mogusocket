@@ -21,6 +21,11 @@ type SectionHandler interface {
 	ReadDump(r io.Reader, isText bool) error
 }
 
+type ClientHandler interface {
+	ReadDump(r io.Reader, len int64, isText bool) error
+	Connect(ctx context.Context, w SendFunc, c func()) error
+}
+
 type SectionsHandler interface {
 	Connect(ctx context.Context, w SendFunc, c func()) (SectionHandler, error)
 	Close(section SectionHandler) error

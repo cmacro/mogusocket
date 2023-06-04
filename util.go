@@ -8,6 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+
+	"github.com/gobwas/httphead"
 )
 
 // SelectFromSlice creates accept function that could be used as Protocol/Extension
@@ -92,6 +94,18 @@ func btrim(bts []byte) []byte {
 		j--
 	}
 	return bts[i:j]
+}
+
+func strHasToken(header, token string) (has bool) {
+	return btsHasToken(strToBytes(header), strToBytes(token))
+}
+
+func btsHasToken(header, token []byte) (has bool) {
+	httphead.ScanTokens(header, func(v []byte) bool {
+		has = bytes.EqualFold(v, token)
+		return !has
+	})
+	return has
 }
 
 const (
