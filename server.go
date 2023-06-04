@@ -40,7 +40,10 @@ func ParserAddr(a string) (*Addr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Addr{Network: u.Scheme, Address: u.Path}, nil
+	if u.Scheme == "unix" {
+		return &Addr{Network: u.Scheme, Address: u.Path}, nil
+	}
+	return &Addr{Network: u.Scheme, Address: u.Host}, nil
 }
 
 func clearEnvConnect(scheme, path string) error {
@@ -59,12 +62,12 @@ func (s *Server) Run(ctx context.Context) {
 		s.Error("failed addr parser ", s.addr, err)
 		return
 	}
-	if err := clearEnvConnect(u.Network, u.Address); err != nil {
+	if err := clearEnvConnect(u.Data()); err != nil {
 		s.Error("Error removing socket file", err)
 		return
 	}
 
-	listener, err := net.Listen(u.Network, u.Address)
+	listener, err := net.Listen(u.Data())
 	if err != nil {
 		s.Error("failed net listen ", s.addr, err)
 		return

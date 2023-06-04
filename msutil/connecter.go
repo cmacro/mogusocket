@@ -78,6 +78,7 @@ func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
 				return
 			}
 			if h.OpCode.IsControl() {
+				c.log.Debug("is control", h.OpCode)
 				if err = ch(h, r); err != nil {
 					c.log.Error("handle control", err)
 					return

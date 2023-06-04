@@ -42,9 +42,8 @@ func main() {
 
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
-	ctx, cancel := context.WithCancel(context.Background())
 	u, _ := ms.ParserAddr(*addr)
-	conn, err := net.Dial(u.Network, u.Address)
+	conn, err := net.Dial(u.Data())
 	if err != nil {
 		mainLog.Error("connect", err)
 		return
@@ -59,7 +58,6 @@ func main() {
 			opcode = ms.OpBinary
 		}
 		w.Reset(conn, state, opcode)
-		// io.Copy(os.Stdout, r)
 		_, err := io.Copy(w, src)
 		if err == nil {
 			err = w.Flush()
@@ -69,15 +67,22 @@ func main() {
 		}
 		return err
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer cancel()
 		for {
 			h, err := r.NextFrame()
 			if err != nil {
-				mainLog.Error("next frame error", err)
+				if err == io.EOF {
+					mainLog.Info("socket closed.")
+				} else {
+					mainLog.Error("next frame error", err)
+				}
 				return
 			}
 			if h.OpCode.IsControl() {
+				mainLog.Info("is control", h.OpCode)
 				continue
 			}
 			// err = section.ReadDump(r, h.OpCode == ms.OpText)
