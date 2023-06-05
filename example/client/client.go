@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -80,6 +81,7 @@ func (s *ClientSession) Connect(ctx context.Context, w ms.SendFunc, c func()) er
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile)
 	flag.Parse()
 
 	mainLog = ms.Stdout("Main", "DEBUG", true)
@@ -88,11 +90,10 @@ func main() {
 	clientDial := msutil.NewClient(session, *addr, ms.Stdout("Dial", "DEBUG", true))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go clientDial.Run(ctx)
-
-	readlog := mainLog.Sub("read")
+	go func() { defer cancel(); clientDial.Run(ctx) }()
 
 	go func(session *ClientSession) {
+		readlog := mainLog.Sub("read")
 		var text string
 		defer cancel()
 		for {

@@ -102,7 +102,7 @@ func (c *Client) GetId() int64 {
 }
 
 func main() {
-	log.SetFlags(0)
+	log.SetFlags(log.Lshortfile)
 	flag.Parse()
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
