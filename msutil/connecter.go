@@ -11,16 +11,16 @@ import (
 	ms "github.com/cmacro/mogusocket"
 )
 
-func NewConnecter(sections ms.SectionsHandler, log ms.Logger) *Connecter {
+func NewConnecter(sections ms.SessionsHandler, log ms.Logger) *Connecter {
 	return &Connecter{
 		log:             log,
-		SectionsHandler: sections,
+		SessionsHandler: sections,
 	}
 }
 
 type Connecter struct {
 	log ms.Logger
-	ms.SectionsHandler
+	ms.SessionsHandler
 }
 
 func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
@@ -52,13 +52,13 @@ func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
 		return err
 	}
 
-	section, err := c.SectionsHandler.Connect(sectionCtx, wh, sectionCancel)
+	section, err := c.SessionsHandler.Connect(sectionCtx, wh, sectionCancel)
 	if err != nil {
 		c.log.Info("connection refused", err)
 		return
 	}
 	defer func() {
-		c.SectionsHandler.Close(section)
+		c.SessionsHandler.Close(section)
 		sectionCancel()
 	}()
 

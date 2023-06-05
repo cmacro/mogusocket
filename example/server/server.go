@@ -7,9 +7,12 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,6 +39,66 @@ func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
 			}
 		}
 	}()
+}
+
+func NewTestSections(log ms.Logger) *Sessions {
+	return &Sessions{
+		log:   log,
+		items: make(map[int64]*Client),
+		Mutex: &sync.Mutex{},
+	}
+}
+
+type Client struct {
+	id     int64
+	log    ms.Logger
+	writer ms.SendFunc
+	ctx    context.Context
+	cancel func()
+}
+
+type Sessions struct {
+	log ms.Logger
+	*sync.Mutex
+
+	maxid int64
+	items map[int64]*Client
+}
+
+func (s *Sessions) Connect(ctx context.Context, w ms.SendFunc, c func()) (ms.SessionHandler, error) {
+	s.Lock()
+	s.maxid++
+	nid := s.maxid
+	section := &Client{id: nid, writer: w, ctx: ctx, cancel: c, log: s.log.Sub(strconv.FormatInt(nid, 10))}
+	s.items[nid] = section
+	s.Unlock()
+
+	return section, nil
+}
+
+func (s *Sessions) Close(section ms.SessionHandler) error {
+	// remove
+	id := section.GetId()
+	s.Lock()
+	delete(s.items, id)
+	s.Unlock()
+	section.Close()
+	return nil
+}
+
+func (c *Client) Close() {
+	c.cancel()
+}
+
+func (c *Client) ReadDump(r io.Reader, isText bool) error {
+	b, _ := io.ReadAll(r)
+	c.log.Info("read dump", isText, "data:", string(b))
+	err := c.writer(strings.NewReader("recv "+string(b)), isText)
+	return err
+}
+
+func (c *Client) GetId() int64 {
+	return c.id
 }
 
 func main() {

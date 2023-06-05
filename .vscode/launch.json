@@ -12,7 +12,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/example/autobahn/",
-            "args": ["-listen=:9001"]
+            "args": ["-listen=unix:///tmp/ws_testsocket.tmp"]
         },
               
         {
@@ -21,7 +21,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/example/client/",
-            "args": ["-listen=tcp://127.0.0.1:9009"]
+            "args": ["-listen=unix:///tmp/ws_testsocket.tmp"]
         }
         
     ]

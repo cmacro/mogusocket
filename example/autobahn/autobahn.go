@@ -18,7 +18,7 @@ import (
 	"github.com/gobwas/httphead"
 )
 
-var addr = flag.String("listen", ":9002", "addr to listen")
+var addr = flag.String("listen", "unix:///tmp/ws_testsocket.tmp", "addr to listen")
 
 func main() {
 	log.SetFlags(0)

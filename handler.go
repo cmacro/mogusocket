@@ -15,7 +15,7 @@ type ConnectHandler interface {
 
 type SendFunc func(src io.Reader, isText bool) error
 
-type SectionHandler interface {
+type SessionHandler interface {
 	GetId() int64
 	Close()
 	ReadDump(r io.Reader, isText bool) error
@@ -26,8 +26,8 @@ type ClientHandler interface {
 	Connect(ctx context.Context, w SendFunc, c func()) error
 }
 
-type SectionsHandler interface {
-	Connect(ctx context.Context, w SendFunc, c func()) (SectionHandler, error)
-	Close(section SectionHandler) error
+type SessionsHandler interface {
+	Connect(ctx context.Context, w SendFunc, c func()) (SessionHandler, error)
+	Close(session SessionHandler) error
 	// ReadDump(r io.Reader, isText bool) error
 }

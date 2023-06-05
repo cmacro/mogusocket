@@ -17,7 +17,6 @@ func NewClient(section ms.ClientHandler, addr string, log ms.Logger) *Client {
 		addr:    addr,
 		log:     log,
 		section: section,
-		// Mutex: &sync.Mutex{},
 	}
 }
 
@@ -25,8 +24,6 @@ type Client struct {
 	addr    string
 	log     ms.Logger
 	section ms.ClientHandler
-	// *sync.Mutex
-	// conn net.Conn
 }
 
 func (c *Client) Run(ctx context.Context) {

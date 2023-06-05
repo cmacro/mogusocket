@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	ms "github.com/cmacro/mogusocket"
@@ -36,77 +36,63 @@ func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
 	}()
 }
 
+type ClientSession struct {
+	*sync.Mutex
+	ms.Logger
+
+	writer ms.SendFunc
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func (s *ClientSession) ReadDump(r io.Reader, len int64, isText bool) error {
+	payload := make([]byte, len)
+	_, err := io.ReadFull(r, payload)
+
+	if err != nil {
+		mainLog.Info("read dump", err)
+		return err
+	}
+	mainLog.Info("read payload:", string(payload))
+	return nil
+}
+
+func (s *ClientSession) Send(txt string) error {
+	s.Debug("send text:", txt)
+	s.Lock()
+	defer s.Unlock()
+	return s.writer(strings.NewReader(txt), true)
+}
+
+func (s *ClientSession) Connect(ctx context.Context, w ms.SendFunc, c func()) error {
+	s.Lock()
+	s.writer = w
+	s.cancel = c
+	s.ctx = ctx
+	s.Unlock()
+
+	if err := s.Send("Hello"); err != nil {
+		s.cancel()
+		return err
+	}
+
+	return nil
+}
+
 func main() {
-	// log.SetFlags(0)
 	flag.Parse()
 
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
-	// mc := msutil.NewClient(*addr, ms.Stdout("Section", "DEBUG", true))
-	// mc.Run()
-
-	u, _ := ms.ParserAddr(*addr)
-	conn, err := net.Dial(u.Data())
-	if err != nil {
-		mainLog.Error("connect", err)
-		return
-	}
-	state := ms.StateClientSide
-	r := &msutil.Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: msutil.ControlFrameHandler(conn, state)}
-	w := msutil.NewWriter(conn, state, 0)
-	wh := func(src io.Reader, isText bool) error {
-		opcode := ms.OpText
-		if !isText {
-			opcode = ms.OpBinary
-		}
-		w.Reset(conn, state, opcode)
-		_, err := io.Copy(w, src)
-		if err == nil {
-			err = w.Flush()
-		}
-		if err != nil {
-			mainLog.Error("connect writer", err)
-		}
-		return err
-	}
+	session := &ClientSession{Mutex: &sync.Mutex{}, Logger: ms.Stdout("Session", "DEBUG", true)}
+	clientDial := msutil.NewClient(session, *addr, ms.Stdout("Dial", "DEBUG", true))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		defer cancel()
-		for {
-			h, err := r.NextFrame()
-			if err != nil {
-				if err == io.EOF {
-					mainLog.Info("socket closed.")
-				} else {
-					mainLog.Error("next frame error", err)
-				}
-				return
-			}
-			if h.OpCode.IsControl() {
-				mainLog.Info("is control", h.OpCode)
-				continue
-			}
-			// err = section.ReadDump(r, h.OpCode == ms.OpText)
-			payload := make([]byte, h.Length)
-			_, err = io.ReadFull(r, payload)
-
-			if err != nil {
-				mainLog.Info("read dump", err)
-				return
-			}
-			mainLog.Info("read payload:", string(payload))
-		}
-	}()
+	go clientDial.Run(ctx)
 
 	readlog := mainLog.Sub("read")
 
-	if err := wh(strings.NewReader("hello"), true); err != nil {
-		readlog.Error("failed send message", err)
-		return
-	}
-
-	go func() {
+	go func(session *ClientSession) {
 		var text string
 		defer cancel()
 		for {
@@ -125,13 +111,13 @@ func main() {
 				}
 				// strings.Trim()
 				readlog.Info("do send:", text)
-				if err := wh(strings.NewReader(text), true); err != nil {
+				if err := session.Send(text); err != nil {
 					readlog.Error("send message", err)
 					return
 				}
 			}
 		}
-	}()
+	}(session)
 
 	<-ctx.Done()
 
