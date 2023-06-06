@@ -19,3 +19,6 @@
 
 # Go workspace file
 go.work
+bin/client
+bin/autobahn
+bin/server

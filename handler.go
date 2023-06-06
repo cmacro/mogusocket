@@ -24,6 +24,7 @@ type SessionHandler interface {
 type ClientHandler interface {
 	ReadDump(r io.Reader, len int64, isText bool) error
 	Connect(ctx context.Context, w SendFunc, c func()) error
+	Close()
 }
 
 type SessionsHandler interface {

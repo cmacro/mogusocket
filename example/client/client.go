@@ -16,7 +16,10 @@ import (
 	"github.com/cmacro/mogusocket/msutil"
 )
 
-var addr = flag.String("listen", "unix:///tmp/ws_testsocket.tmp", "addr to listen")
+var (
+	addr     = flag.String("listen", "unix:///tmp/ws_testsocket.tmp", "addr to listen")
+	autoconn = flag.String("autoconn", "false", "auto connect")
+)
 
 var mainLog ms.Logger
 
@@ -51,10 +54,15 @@ func (s *ClientSession) ReadDump(r io.Reader, len int64, isText bool) error {
 	_, err := io.ReadFull(r, payload)
 
 	if err != nil {
-		mainLog.Info("read dump", err)
+		s.Info("read dump", err)
 		return err
 	}
-	mainLog.Info("read payload:", string(payload))
+	s.Info("read payload:", string(payload))
+	if isText && string(payload) == "recv cancel" {
+		s.Debug("call cancel")
+		s.cancel()
+	}
+
 	return nil
 }
 
@@ -62,10 +70,16 @@ func (s *ClientSession) Send(txt string) error {
 	s.Debug("send text:", txt)
 	s.Lock()
 	defer s.Unlock()
-	return s.writer(strings.NewReader(txt), true)
+	if s.writer != nil {
+		return s.writer(strings.NewReader(txt), true)
+	}
+	s.Logger.Warnf("not connect")
+	return nil
 }
 
 func (s *ClientSession) Connect(ctx context.Context, w ms.SendFunc, c func()) error {
+	s.Info("server connected")
+
 	s.Lock()
 	s.writer = w
 	s.cancel = c
@@ -73,11 +87,24 @@ func (s *ClientSession) Connect(ctx context.Context, w ms.SendFunc, c func()) er
 	s.Unlock()
 
 	if err := s.Send("Hello"); err != nil {
+		s.Error("failed send", err)
 		s.cancel()
 		return err
 	}
-
 	return nil
+}
+
+func (s *ClientSession) Close() {
+	s.Info("connect closed.")
+
+	s.Lock()
+	defer s.Unlock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.writer = nil
+	s.cancel = nil
+	s.ctx = nil
 }
 
 func main() {
@@ -87,10 +114,14 @@ func main() {
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
 	session := &ClientSession{Mutex: &sync.Mutex{}, Logger: ms.Stdout("Session", "DEBUG", true)}
-	clientDial := msutil.NewClient(session, *addr, ms.Stdout("Dial", "DEBUG", true))
-
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() { defer cancel(); clientDial.Run(ctx) }()
+
+	if *autoconn == "true" {
+		clientconnect := msutil.NewAutoConnectClient(session, *addr, session.Logger)
+		clientconnect.Run(ctx, cancel) // .ConnectServer(*addr, session, ctx, session.Logger)
+	} else {
+		go msutil.ConnectServer(*addr, session, ctx, cancel, session.Logger)
+	}
 
 	go func(session *ClientSession) {
 		readlog := mainLog.Sub("read")
@@ -106,11 +137,16 @@ func main() {
 					readlog.Error("read os stdin", err)
 					return
 				}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
 				if text == ".q" {
 					readlog.Info("closed.")
 					return
 				}
-				// strings.Trim()
 				readlog.Info("do send:", text)
 				if err := session.Send(text); err != nil {
 					readlog.Error("send message", err)
@@ -121,5 +157,5 @@ func main() {
 	}(session)
 
 	<-ctx.Done()
-
+	mainLog.Info("closed.")
 }

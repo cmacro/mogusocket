@@ -9,63 +9,132 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	ms "github.com/cmacro/mogusocket"
 )
 
-func NewClient(section ms.ClientHandler, addr string, log ms.Logger) *Client {
+func NewClient(session ms.ClientHandler, addr string, log ms.Logger) *Client {
 	return &Client{
 		addr:    addr,
 		log:     log,
-		section: section,
+		session: session,
 	}
 }
 
-// func NewAutoConnectClient(section ms.ClientHandler, addr string, log ms.Logger)
+func NewAutoConnectClient(session ms.ClientHandler, addr string, log ms.Logger) *AutoConnectClient {
+	return &AutoConnectClient{
+		addr:    addr,
+		log:     log,
+		session: session,
+		Mutex:   &sync.Mutex{},
+	}
+}
 
 var (
-	ErrNoURL            = errors.New("frame socket is no url config")
-	ErrAlreadyConnected = errors.New("frame socket is already open")
+	ErrNoURL        = errors.New("frame socket is no url config")
+	ErrClientClosed = errors.New("client connect closed")
+	// ErrAlreadyConnected = errors.New("frame socket is already open")
 )
 
 type Client struct {
 	addr    string
 	log     ms.Logger
-	section ms.ClientHandler
+	session ms.ClientHandler
 }
 
-type ClientAutoConnect struct {
-	Client
-	conn                net.Conn
+type AutoConnectClient struct {
+	addr string
+	log  ms.Logger
+	*sync.Mutex
+	session             ms.ClientHandler
 	ctx                 context.Context
+	cancel              context.CancelFunc
 	AutoReconnectErrors int
 }
 
-func (c *ClientAutoConnect) autoReconnect() {
+func (c *AutoConnectClient) Run(ctx context.Context, cancel context.CancelFunc) {
+	c.ctx = ctx
+	c.cancel = cancel
+	conn, err := DialServer(c.addr)
+	if err != nil {
+		go c.autoReconnect()
+	} else {
+		go c.connect(conn)
+	}
+}
+
+func (c *AutoConnectClient) autoReconnect() {
+	var isConnected bool
+	defer func() {
+		if !isConnected {
+			c.cancel()
+		}
+	}()
+
 	for {
 		autoReconnectDelay := time.Duration(c.AutoReconnectErrors) * 2 * time.Second
 		c.log.Debugf("Automatically reconnecting after %v", autoReconnectDelay)
 		c.AutoReconnectErrors++
 		time.Sleep(autoReconnectDelay)
-		err := c.connect()
-		if errors.Is(err, ErrAlreadyConnected) {
-			c.log.Debugf("Connect() said we're already connected after autoreconnect sleep")
-			return
-		} else if errors.Is(err, ErrNoURL) {
-			c.log.Debugf("Connect() is no url config")
-			return
-		} else if err != nil {
-			c.log.Errorf("Error reconnecting after autoreconnect sleep: %v", err)
+
+		conn, err := DialServer(c.addr)
+		if err != nil {
+			if errors.Is(err, ErrNoURL) {
+				c.log.Debugf("Connect() is no url config")
+				return
+			} else if err != nil {
+				c.log.Errorf("Error reconnecting after autoreconnect sleep: %v", err)
+			}
 		} else {
+			go c.connect(conn)
+			c.AutoReconnectErrors = 0
+			isConnected = true
 			return
 		}
 	}
 }
 
+func (c *AutoConnectClient) close(code int) {
+	if code == 0 {
+		go c.autoReconnect()
+	} else {
+		c.cancel()
+	}
+}
+
+func (c *AutoConnectClient) connect(conn net.Conn) {
+	var code int
+	defer func() {
+		conn.Close()
+		go c.close(code)
+	}()
+
+	connClosed := make(chan error, 1)
+	go func() { connClosed <- ConnectClient(conn, c.session, c.ctx, c.log) }()
+
+	select {
+	case <-c.ctx.Done():
+		c.log.Debug("context done")
+		code = 1 // dont connect
+	case err := <-connClosed:
+		c.log.Debug("ConnectClient done")
+		if err != nil {
+			if err == ErrClientClosed {
+				c.log.Info("client request closed")
+				code = 1
+			} else if err == io.EOF {
+				c.log.Info("server closed.")
+			} else {
+				c.log.Error("connect client", err)
+			}
+		}
+	}
+}
+
 func (c *Client) Run(ctx context.Context) {
-	u, _ := ms.ParserAddr(c.addr)
-	conn, err := net.Dial(u.Data())
+	conn, err := DialServer(c.addr)
 	if err != nil {
 		c.log.Error("connect", err)
 		return
@@ -77,72 +146,35 @@ func (c *Client) Run(ctx context.Context) {
 			c.log.Error("close connection", err)
 		}
 	}()
-
-	state := ms.StateClientSide
-	r := &Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: ControlFrameHandler(conn, state)}
-	// var buf bytes.Buffer
-	w := NewWriter(conn, state, 0)
-	wh := func(src io.Reader, isText bool) error {
-		opcode := ms.OpText
-		if !isText {
-			opcode = ms.OpBinary
-		}
-		w.Reset(conn, state, opcode)
-		_, err := io.Copy(w, src)
-		if err == nil {
-			err = w.Flush()
-		}
-		if err != nil {
-			c.log.Error("connect writer", err)
-		}
-		return err
-	}
-
-	sctx, scancel := context.WithCancel(ctx)
-	if err := c.section.Connect(sctx, wh, scancel); err != nil {
-		c.log.Error("failed open section", err)
-		return
-	}
-
-	go func() {
-		defer scancel()
-		for {
-			h, err := r.NextFrame()
-			if err != nil {
-				if err == io.EOF {
-					c.log.Info("socket closed.")
-				} else {
-					c.log.Error("next frame error", err)
-				}
-				return
-			}
-			if h.OpCode.IsControl() {
-				c.log.Info("is control", h.OpCode)
-				continue
-			}
-			if err := c.section.ReadDump(r, h.Length, h.OpCode == ms.OpText); err != nil {
-				c.log.Info("read dump", err)
-				return
-			}
-		}
-	}()
-
-	<-ctx.Done()
+	ConnectClient(conn, c.session, ctx, c.log)
 }
 
-func (c *Client) work(conn net.Conn, ctx context.Context) {
+func ConnectServer(addr string, session ms.ClientHandler, ctx context.Context, cancel context.CancelFunc, log ms.Logger) error {
+	defer cancel()
+	conn, err := DialServer(addr)
+	if err != nil {
+		return err
+	}
 	defer func() {
-		c.log.Debug("client closed.")
 		if err := conn.Close(); err != nil {
-			c.log.Error("close connection", err)
+			log.Error("close connection", err)
 		}
 	}()
+	err = ConnectClient(conn, session, ctx, log)
+	return err
+}
 
+func DialServer(addr string) (net.Conn, error) {
+	u, _ := ms.ParserAddr(addr)
+	return net.Dial(u.Data())
+}
+
+func ConnectClient(conn net.Conn, session ms.ClientHandler, ctx context.Context, log ms.Logger) error {
 	state := ms.StateClientSide
 	r := &Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: ControlFrameHandler(conn, state)}
-	// var buf bytes.Buffer
 	w := NewWriter(conn, state, 0)
-	wh := func(src io.Reader, isText bool) error {
+
+	writehandler := func(src io.Reader, isText bool) error {
 		opcode := ms.OpText
 		if !isText {
 			opcode = ms.OpBinary
@@ -152,40 +184,41 @@ func (c *Client) work(conn net.Conn, ctx context.Context) {
 		if err == nil {
 			err = w.Flush()
 		}
-		if err != nil {
-			c.log.Error("connect writer", err)
-		}
 		return err
 	}
 
 	sctx, scancel := context.WithCancel(ctx)
-	if err := c.section.Connect(sctx, wh, scancel); err != nil {
-		c.log.Error("failed open section", err)
-		return
+	if err := session.Connect(sctx, writehandler, scancel); err != nil {
+		log.Error("failed open section", err)
+		return err
 	}
-
-	go func() {
-		defer scancel()
-		for {
-			h, err := r.NextFrame()
-			if err != nil {
-				if err == io.EOF {
-					c.log.Info("socket closed.")
-				} else {
-					c.log.Error("next frame error", err)
-				}
-				return
-			}
-			if h.OpCode.IsControl() {
-				c.log.Info("is control", h.OpCode)
-				continue
-			}
-			if err := c.section.ReadDump(r, h.Length, h.OpCode == ms.OpText); err != nil {
-				c.log.Info("read dump", err)
-				return
-			}
-		}
+	defer func() {
+		scancel()
+		session.Close()
 	}()
 
-	<-ctx.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug("ctx.Done")
+			return nil
+		case <-sctx.Done():
+			log.Debug("sctx.Done")
+			return ErrClientClosed
+
+		default:
+			h, err := r.NextFrame()
+			if err != nil {
+				return err
+			}
+			if h.OpCode.IsControl() {
+				log.Info("is control", h.OpCode)
+				continue
+			}
+			if err := session.ReadDump(r, h.Length, h.OpCode == ms.OpText); err != nil {
+				log.Info("read dump", err)
+				return err
+			}
+		}
+	}
 }
