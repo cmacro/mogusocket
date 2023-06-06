@@ -7,38 +7,23 @@ package mogusocket
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 )
 
 // Logger is a simple logger interface that can have subloggers for specific areas.
 type Logger interface {
-	Warnf(msg string, args ...interface{})
-	Errorf(msg string, args ...interface{})
-	Infof(msg string, args ...interface{})
-	Debugf(msg string, args ...interface{})
-	Fatalf(msg string, args ...interface{})
 	Warn(msgs ...interface{})
 	Error(msgs ...interface{})
 	Info(msgs ...interface{})
 	Debug(msgs ...interface{})
-
-	Sub(module string) Logger
 }
 
 type noopLogger struct{}
 
-func (n *noopLogger) Errorf(_ string, _ ...interface{}) {}
-func (n *noopLogger) Warnf(_ string, _ ...interface{})  {}
-func (n *noopLogger) Infof(_ string, _ ...interface{})  {}
-func (n *noopLogger) Debugf(_ string, _ ...interface{}) {}
-func (n *noopLogger) Fatalf(_ string, _ ...interface{}) { os.Exit(1) }
-func (n *noopLogger) Warn(_ ...interface{})             {}
-func (n *noopLogger) Error(_ ...interface{})            {}
-func (n *noopLogger) Info(_ ...interface{})             {}
-func (n *noopLogger) Debug(_ ...interface{})            {}
-
-func (n *noopLogger) Sub(_ string) Logger { return n }
+func (n *noopLogger) Warn(_ ...interface{})  {}
+func (n *noopLogger) Error(_ ...interface{}) {}
+func (n *noopLogger) Info(_ ...interface{})  {}
+func (n *noopLogger) Debug(_ ...interface{}) {}
 
 // Noop is a no-op Logger implementation that silently drops everything.
 var Noop Logger = &noopLogger{}
@@ -102,22 +87,10 @@ func (s *stdoutLogger) output(level string, msgs ...interface{}) {
 	log.Print(colorStart, "[", s.mod, " ", level, "] ", outmsg[:len(outmsg)-1], colorReset)
 }
 
-func (s *stdoutLogger) Fatalf(msg string, args ...interface{}) {
-	s.outputf("ERROR", msg, args...)
-	os.Exit(1)
-}
-func (s *stdoutLogger) Errorf(msg string, args ...interface{}) { s.outputf("ERROR", msg, args...) }
-func (s *stdoutLogger) Warnf(msg string, args ...interface{})  { s.outputf("WARN", msg, args...) }
-func (s *stdoutLogger) Infof(msg string, args ...interface{})  { s.outputf("INFO", msg, args...) }
-func (s *stdoutLogger) Debugf(msg string, args ...interface{}) { s.outputf("DEBUG", msg, args...) }
-func (s *stdoutLogger) Warn(msgs ...interface{})               { s.output("WARN", msgs...) }
-func (s *stdoutLogger) Error(msgs ...interface{})              { s.output("ERROR", msgs...) }
-func (s *stdoutLogger) Info(msgs ...interface{})               { s.output("INFO", msgs...) }
-func (s *stdoutLogger) Debug(msgs ...interface{})              { s.output("DEBUG", msgs...) }
-
-func (s *stdoutLogger) Sub(mod string) Logger {
-	return &stdoutLogger{mod: fmt.Sprintf("%s/%s", s.mod, mod), color: s.color, min: s.min}
-}
+func (s *stdoutLogger) Warn(msgs ...interface{})  { s.output("WARN", msgs...) }
+func (s *stdoutLogger) Error(msgs ...interface{}) { s.output("ERROR", msgs...) }
+func (s *stdoutLogger) Info(msgs ...interface{})  { s.output("INFO", msgs...) }
+func (s *stdoutLogger) Debug(msgs ...interface{}) { s.output("DEBUG", msgs...) }
 
 // Stdout is a simple Logger implementation that outputs to stdout. The module name given is included in log lines.
 //

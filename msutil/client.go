@@ -75,17 +75,17 @@ func (c *AutoConnectClient) autoReconnect() {
 
 	for {
 		autoReconnectDelay := time.Duration(c.AutoReconnectErrors) * 2 * time.Second
-		c.log.Debugf("Automatically reconnecting after %v", autoReconnectDelay)
+		c.log.Debug("Automatically reconnecting after", autoReconnectDelay)
 		c.AutoReconnectErrors++
 		time.Sleep(autoReconnectDelay)
 
 		conn, err := DialServer(c.addr)
 		if err != nil {
 			if errors.Is(err, ErrNoURL) {
-				c.log.Debugf("Connect() is no url config")
+				c.log.Debug("Connect() is no url config")
 				return
 			} else if err != nil {
-				c.log.Errorf("Error reconnecting after autoreconnect sleep: %v", err)
+				c.log.Error("Error reconnecting after autoreconnect sleep:", err)
 			}
 		} else {
 			go c.connect(conn)

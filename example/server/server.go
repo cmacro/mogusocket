@@ -69,7 +69,8 @@ func (s *Sessions) Connect(ctx context.Context, w ms.SendFunc, c func()) (ms.Ses
 	s.Lock()
 	s.maxid++
 	nid := s.maxid
-	section := &Client{id: nid, writer: w, ctx: ctx, cancel: c, log: s.log.Sub(strconv.FormatInt(nid, 10))}
+	log := ms.Stdout("session-"+strconv.FormatInt(nid, 10), "DEBUG", true)
+	section := &Client{id: nid, writer: w, ctx: ctx, cancel: c, log: log}
 	s.items[nid] = section
 	s.Unlock()
 
@@ -107,7 +108,7 @@ func main() {
 	mainLog = ms.Stdout("Main", "DEBUG", true)
 
 	svrLog := ms.Stdout("Server", "DEBUG", true)
-	connecter := msutil.NewConnecter(NewTestSections(ms.Stdout("Sections", "DEBUG", true)), svrLog.Sub("Connect"))
+	connecter := msutil.NewConnecter(NewTestSections(ms.Stdout("Sections", "DEBUG", true)), svrLog)
 	ms := ms.NewServer(*addr, connecter, svrLog)
 
 	ctx, cancel := context.WithCancel(context.Background())

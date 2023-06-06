@@ -70,7 +70,7 @@ func (s *ClientSession) Send(txt string) error {
 	if s.writer != nil {
 		return s.writer(strings.NewReader(txt), true)
 	}
-	s.Logger.Warnf("not connect")
+	s.Logger.Warn("not connect")
 	return nil
 }
 
@@ -121,7 +121,7 @@ func main() {
 	}
 
 	go func(session *ClientSession) {
-		readlog := mainLog.Sub("read")
+		readlog := ms.Stdout("Read", "DEBUG", true)
 		var text string
 		defer cancel()
 		for {
