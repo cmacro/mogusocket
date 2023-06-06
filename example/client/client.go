@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 
 	ms "github.com/cmacro/mogusocket"
 	"github.com/cmacro/mogusocket/msutil"
@@ -23,22 +20,22 @@ var (
 
 var mainLog ms.Logger
 
-func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
-	defer mainLog.Info("close sys signal.")
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for {
-			select {
-			case <-sigs:
-				cancel()
-				return
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-}
+// func runSysSignal(ctx context.Context, cancel context.CancelFunc) {
+// 	defer mainLog.Info("close sys signal.")
+// 	sigs := make(chan os.Signal, 1)
+// 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+// 	go func() {
+// 		for {
+// 			select {
+// 			case <-sigs:
+// 				cancel()
+// 				return
+// 			case <-ctx.Done():
+// 				return
+// 			}
+// 		}
+// 	}()
+// }
 
 type ClientSession struct {
 	*sync.Mutex
