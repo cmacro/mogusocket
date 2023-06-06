@@ -6,6 +6,7 @@
     "configurations": [
 
 
+
         {
             "name": "Launch autobahn",
             "type": "go",
@@ -15,6 +16,14 @@
             "args": ["-listen=unix:///tmp/ws_testsocket.tmp"]
         },
               
+        {
+            "name": "Launch Server",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/example/server/",
+            "args": ["-listen=unix:///tmp/ws_testsocket.tmp"]
+        },
         {
             "name": "Launch Client",
             "type": "go",
