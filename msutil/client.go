@@ -215,7 +215,7 @@ func ConnectClient(conn net.Conn, session ms.ClientHandler, ctx context.Context,
 				log.Info("is control", h.OpCode)
 				continue
 			}
-			if err := session.ReadDump(r, h.Length, h.OpCode == ms.OpText); err != nil {
+			if err := session.ReadPump(r, h.Length, h.OpCode == ms.OpText); err != nil {
 				log.Info("read dump", err)
 				return err
 			}

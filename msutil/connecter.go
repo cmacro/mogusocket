@@ -85,7 +85,7 @@ func (c *Connecter) Run(ctx context.Context, conn io.ReadWriter) {
 				}
 				continue
 			}
-			err = section.ReadDump(r, h.OpCode == ms.OpText)
+			err = section.ReadPump(r, h.OpCode == ms.OpText)
 			if err != nil {
 				c.log.Info("read dump", err)
 				return

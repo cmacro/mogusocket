@@ -91,7 +91,7 @@ func (c *Client) Close() {
 	c.cancel()
 }
 
-func (c *Client) ReadDump(r io.Reader, isText bool) error {
+func (c *Client) ReadPump(r io.Reader, isText bool) error {
 	b, _ := io.ReadAll(r)
 	c.log.Info("read dump", isText, "data:", string(b))
 	err := c.writer(strings.NewReader("recv "+string(b)), isText)

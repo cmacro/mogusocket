@@ -46,7 +46,7 @@ type ClientSession struct {
 	cancel context.CancelFunc
 }
 
-func (s *ClientSession) ReadDump(r io.Reader, len int64, isText bool) error {
+func (s *ClientSession) ReadPump(r io.Reader, len int64, isText bool) error {
 	payload := make([]byte, len)
 	_, err := io.ReadFull(r, payload)
 
