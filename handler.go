@@ -18,7 +18,7 @@ type SendFunc func(src io.Reader, isText bool) error
 type SessionHandler interface {
 	GetId() int64
 	Close()
-	ReadPump(r io.Reader, isText bool) error
+	ReadPump(r io.Reader, len int64, isText bool) error
 }
 
 type ClientHandler interface {

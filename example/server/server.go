@@ -60,7 +60,6 @@ type Client struct {
 type Sessions struct {
 	log ms.Logger
 	*sync.Mutex
-
 	maxid int64
 	items map[int64]*Client
 }
@@ -91,7 +90,7 @@ func (c *Client) Close() {
 	c.cancel()
 }
 
-func (c *Client) ReadPump(r io.Reader, isText bool) error {
+func (c *Client) ReadPump(r io.Reader, len int64, isText bool) error {
 	b, _ := io.ReadAll(r)
 	c.log.Info("read dump", isText, "data:", string(b))
 	err := c.writer(strings.NewReader("recv "+string(b)), isText)
