@@ -6,7 +6,7 @@ package mogusocket
 
 import (
 	"bufio"
-	"io/ioutil"
+	"io"
 	"net/textproto"
 	"net/url"
 	"testing"
@@ -108,7 +108,7 @@ func BenchmarkHttpWriteUpgradeRequest(b *testing.B) {
 			url: makeURL("ws://example.org"),
 		},
 	} {
-		bw := bufio.NewWriter(ioutil.Discard)
+		bw := bufio.NewWriter(io.Discard)
 		nonce := make([]byte, nonceSize)
 		initNonce(nonce)
 
