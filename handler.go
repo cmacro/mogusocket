@@ -18,11 +18,11 @@ type SendFunc func(src io.Reader, isText bool) error
 type SessionHandler interface {
 	GetId() int64
 	Close()
-	ReadDump(r io.Reader, isText bool) error
+	ReadPump(r io.Reader, len int64, isText bool) error
 }
 
 type ClientHandler interface {
-	ReadDump(r io.Reader, len int64, isText bool) error
+	ReadPump(r io.Reader, len int64, isText bool) error
 	Connect(ctx context.Context, w SendFunc, c func()) error
 	Close()
 }
@@ -30,5 +30,5 @@ type ClientHandler interface {
 type SessionsHandler interface {
 	Connect(ctx context.Context, w SendFunc, c func()) (SessionHandler, error)
 	Close(session SessionHandler) error
-	// ReadDump(r io.Reader, isText bool) error
+	// ReadPump(r io.Reader, isText bool) error
 }
