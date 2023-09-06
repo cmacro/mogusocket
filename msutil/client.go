@@ -197,28 +197,40 @@ func ConnectClient(conn net.Conn, session ms.ClientHandler, ctx context.Context,
 		session.Close()
 	}()
 
+	var err error
+	go func() {
+		var h ms.Header
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sctx.Done():
+				return
+			default:
+				h, err = r.NextFrame()
+				if err != nil {
+					return
+				}
+				if h.OpCode.IsControl() {
+					continue
+				}
+				err = session.ReadPump(r, h.Length, h.OpCode == ms.OpText)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug("ctx.Done")
-			return nil
+			scancel()
+			return err
 		case <-sctx.Done():
-			log.Debug("sctx.Done")
-			return ErrClientClosed
-
-		default:
-			h, err := r.NextFrame()
-			if err != nil {
-				return err
-			}
-			if h.OpCode.IsControl() {
-				log.Info("is control", h.OpCode)
-				continue
-			}
-			if err := session.ReadPump(r, h.Length, h.OpCode == ms.OpText); err != nil {
-				log.Info("read dump", err)
-				return err
-			}
+			return err
 		}
 	}
+
+	// return err
 }
