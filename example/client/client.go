@@ -117,7 +117,7 @@ func main() {
 		clientconnect := msutil.NewAutoConnectClient(session, *addr, session.Logger)
 		clientconnect.Run(ctx, cancel) // .ConnectServer(*addr, session, ctx, session.Logger)
 	} else {
-		go msutil.ConnectServer(*addr, session, ctx, cancel, session.Logger)
+		go msutil.ConnectServer(ctx, *addr, session, cancel, session.Logger)
 	}
 
 	go func(session *ClientSession) {

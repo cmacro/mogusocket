@@ -112,7 +112,7 @@ func (c *AutoConnectClient) connect(conn net.Conn) {
 	}()
 
 	connClosed := make(chan error, 1)
-	go func() { connClosed <- ConnectClient(conn, c.session, c.ctx, c.log) }()
+	go func() { connClosed <- ConnectClient(c.ctx, conn, c.session, c.log) }()
 
 	select {
 	case <-c.ctx.Done():
@@ -146,10 +146,10 @@ func (c *Client) Run(ctx context.Context) {
 			c.log.Error("close connection", err)
 		}
 	}()
-	ConnectClient(conn, c.session, ctx, c.log)
+	ConnectClient(ctx, conn, c.session, c.log)
 }
 
-func ConnectServer(addr string, session ms.ClientHandler, ctx context.Context, cancel context.CancelFunc, log ms.Logger) error {
+func ConnectServer(ctx context.Context, addr string, session ms.ClientHandler, cancel context.CancelFunc, log ms.Logger) error {
 	defer cancel()
 	conn, err := DialServer(addr)
 	if err != nil {
@@ -160,7 +160,8 @@ func ConnectServer(addr string, session ms.ClientHandler, ctx context.Context, c
 			log.Error("close connection", err)
 		}
 	}()
-	err = ConnectClient(conn, session, ctx, log)
+
+	err = ConnectClient(ctx, conn, session, log)
 	return err
 }
 
@@ -169,7 +170,8 @@ func DialServer(addr string) (net.Conn, error) {
 	return net.Dial(u.Data())
 }
 
-func ConnectClient(conn net.Conn, session ms.ClientHandler, ctx context.Context, log ms.Logger) error {
+func ConnectClient(ctx context.Context, conn net.Conn, session ms.ClientHandler, log ms.Logger) error {
+
 	state := ms.StateClientSide
 	r := &Reader{Source: conn, State: state, CheckUTF8: true, OnIntermediate: ControlFrameHandler(conn, state)}
 	w := NewWriter(conn, state, 0)
@@ -197,40 +199,23 @@ func ConnectClient(conn net.Conn, session ms.ClientHandler, ctx context.Context,
 		session.Close()
 	}()
 
-	var err error
 	go func() {
-		var h ms.Header
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-sctx.Done():
-				return
-			default:
-				h, err = r.NextFrame()
-				if err != nil {
-					return
-				}
-				if h.OpCode.IsControl() {
-					continue
-				}
-				err = session.ReadPump(r, h.Length, h.OpCode == ms.OpText)
-				if err != nil {
-					return
-				}
-			}
-		}
+		<-sctx.Done()
+		conn.Close()
 	}()
 
 	for {
-		select {
-		case <-ctx.Done():
-			scancel()
+		h, err := r.NextFrame()
+		if err != nil {
 			return err
-		case <-sctx.Done():
+		}
+		if h.OpCode.IsControl() {
+			log.Info("is control", h.OpCode)
+			continue
+		}
+		if err := session.ReadPump(r, h.Length, h.OpCode == ms.OpText); err != nil {
+			log.Info("read dump", err)
 			return err
 		}
 	}
-
-	// return err
 }
