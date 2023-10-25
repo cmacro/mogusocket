@@ -155,11 +155,7 @@ func ConnectServer(ctx context.Context, addr string, session ms.ClientHandler, c
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Error("close connection", err)
-		}
-	}()
+	defer conn.Close()
 
 	err = ConnectClient(ctx, conn, session, log)
 	return err
