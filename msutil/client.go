@@ -149,8 +149,7 @@ func (c *Client) Run(ctx context.Context) {
 	ConnectClient(ctx, conn, c.session, c.log)
 }
 
-func ConnectServer(ctx context.Context, addr string, session ms.ClientHandler, cancel context.CancelFunc, log ms.Logger) error {
-	defer cancel()
+func ConnectServer(ctx context.Context, addr string, session ms.ClientHandler, log ms.Logger) error {
 	conn, err := DialServer(addr)
 	if err != nil {
 		return err
